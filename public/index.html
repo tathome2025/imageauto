@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bannerbear Layout App</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <div class="eyebrow">Minimal Bannerbear Tool</div>
+        <h1>快速排版並生成 Banner</h1>
+        <p class="intro">
+          先在 Bannerbear 建一個 template，並將圖層命名為
+          <code>title</code>、<code>subtitle</code>、<code>photo</code>，然後把 API
+          key 與 template id 放進 <code>.env</code>。
+        </p>
+
+        <div id="status" class="status">檢查設定中...</div>
+
+        <form id="render-form" class="form">
+          <label>
+            標題
+            <input id="title" name="title" type="text" placeholder="輸入主標題" />
+          </label>
+
+          <label>
+            副標
+            <input id="subtitle" name="subtitle" type="text" placeholder="輸入副標題" />
+          </label>
+
+          <label>
+            背景圖 URL
+            <input
+              id="imageUrl"
+              name="imageUrl"
+              type="url"
+              placeholder="https://images.unsplash.com/..."
+            />
+          </label>
+
+          <button id="submit-button" type="submit">生成圖片</button>
+        </form>
+      </section>
+
+      <section class="preview">
+        <div class="preview-card">
+          <div class="preview-label">結果</div>
+          <div id="message" class="message">尚未生成圖片。</div>
+          <img id="result-image" alt="Banner result preview" hidden />
+          <a id="result-link" href="#" target="_blank" rel="noreferrer" hidden>
+            在新分頁打開
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
