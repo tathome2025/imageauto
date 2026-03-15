@@ -35,36 +35,42 @@ form.addEventListener("submit", async (event) => {
 
   try {
     const mainImageFile = formData.get("mainImage");
-    const secondaryImageFiles = formData.getAll("secondaryImages");
+    const secondaryImage1 = formData.get("secondaryImage1");
+    const secondaryImage2 = formData.get("secondaryImage2");
     const manualMainImageUrl = formData.get("mainImageUrl")?.toString().trim();
-
-    const actualSecondaryFiles = secondaryImageFiles.filter(
-      (file) => file instanceof File && file.size > 0,
-    );
+    const itemTexts = [
+      formData.get("item1")?.toString().trim(),
+      formData.get("item2")?.toString().trim(),
+      formData.get("item3")?.toString().trim(),
+    ];
 
     if (!manualMainImageUrl && (!(mainImageFile instanceof File) || mainImageFile.size === 0)) {
       messageNode.textContent = "請提供 1 張主圖。";
       return;
     }
 
-    if (actualSecondaryFiles.length < 1 || actualSecondaryFiles.length > 5) {
-      messageNode.textContent = "請上傳 1 到 5 張副圖。";
+    if (!(secondaryImage1 instanceof File) || secondaryImage1.size === 0) {
+      messageNode.textContent = "請上傳副圖 1。";
+      return;
+    }
+
+    if (!(secondaryImage2 instanceof File) || secondaryImage2.size === 0) {
+      messageNode.textContent = "請上傳副圖 2。";
       return;
     }
 
     let uploadedMainImageUrl = manualMainImageUrl;
     let uploadedSecondaryImageUrls = [];
 
-    if (!manualMainImageUrl || actualSecondaryFiles.length > 0) {
+    if (!manualMainImageUrl || secondaryImage1.size > 0 || secondaryImage2.size > 0) {
       const uploadFormData = new FormData();
 
       if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
         uploadFormData.append("mainImage", mainImageFile);
       }
 
-      for (const file of actualSecondaryFiles) {
-        uploadFormData.append("secondaryImages", file);
-      }
+      uploadFormData.append("secondaryImage1", secondaryImage1);
+      uploadFormData.append("secondaryImage2", secondaryImage2);
 
       const uploadResponse = await fetch("/api/upload", {
         method: "POST",
@@ -87,6 +93,7 @@ form.addEventListener("submit", async (event) => {
     const payload = {
       title: formData.get("title")?.toString().trim(),
       subtitle: formData.get("subtitle")?.toString().trim(),
+      itemTexts,
       mainImageUrl: uploadedMainImageUrl,
       secondaryImageUrls: uploadedSecondaryImageUrls,
     };

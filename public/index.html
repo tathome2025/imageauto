@@ -13,22 +13,38 @@
         <h1>快速排版並生成 Banner</h1>
         <p class="intro">
           先在 Bannerbear 建一個 template，並將圖層命名為
-          <code>title</code>、<code>subtitle</code>、<code>photo_main</code>，
-          以及 <code>photo_sub_1</code> 到 <code>photo_sub_5</code>，然後把 API key
-          與 template id 放進 <code>.env</code> 或 Vercel 環境變數。
+          <code>car_model</code>、<code>car_brand</code>、<code>car_image</code>、
+          <code>product1</code>、<code>product2</code>、<code>items1</code>、
+          <code>items2</code>、<code>items3</code>，然後把 API key 與 template id
+          放進 <code>.env</code> 或 Vercel 環境變數。
         </p>
 
         <div id="status" class="status">檢查設定中...</div>
 
         <form id="render-form" class="form">
           <label>
-            標題
-            <input id="title" name="title" type="text" placeholder="輸入主標題" />
+            Car Model
+            <input id="title" name="title" type="text" placeholder="例如 Tesla Model 3" />
           </label>
 
           <label>
-            副標
-            <input id="subtitle" name="subtitle" type="text" placeholder="輸入副標題" />
+            Car Brand
+            <input id="subtitle" name="subtitle" type="text" placeholder="例如 Tesla" />
+          </label>
+
+          <label>
+            Product Item 1
+            <input id="item1" name="item1" type="text" placeholder="例如 Premium Interior" />
+          </label>
+
+          <label>
+            Product Item 2
+            <input id="item2" name="item2" type="text" placeholder="例如 18-inch Wheels" />
+          </label>
+
+          <label>
+            Product Item 3
+            <input id="item3" name="item3" type="text" placeholder="例如 Autopilot Ready" />
           </label>
 
           <label>
@@ -37,18 +53,16 @@
           </label>
 
           <label>
-            副圖（1 到 5 張）
-            <input
-              id="secondaryImages"
-              name="secondaryImages"
-              type="file"
-              accept="image/*"
-              multiple
-              required
-            />
+            副圖 1
+            <input id="secondaryImage1" name="secondaryImage1" type="file" accept="image/*" required />
           </label>
 
-          <p class="helper">最多 5 張副圖。系統會依序對應到 photo_sub_1 到 photo_sub_5。</p>
+          <label>
+            副圖 2
+            <input id="secondaryImage2" name="secondaryImage2" type="file" accept="image/*" required />
+          </label>
+
+          <p class="helper">主圖對應 `car_image`，副圖 1/2 分別對應 `product1`、`product2`。</p>
 
           <label>
             或手動指定主圖 URL
