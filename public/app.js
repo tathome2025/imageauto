@@ -1,9 +1,12 @@
+import { upload } from "https://esm.sh/@vercel/blob/client";
+
 const statusNode = document.getElementById("status");
 const messageNode = document.getElementById("message");
 const resultImage = document.getElementById("result-image");
 const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
+const multipartThreshold = 4.5 * 1024 * 1024;
 
 async function readApiResponse(response) {
   const raw = await response.text();
@@ -34,6 +37,21 @@ async function loadConfig() {
     statusNode.textContent = "無法讀取伺服器設定。";
     statusNode.className = "status error";
   }
+}
+
+function sanitizeFilename(filename) {
+  return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+async function uploadImageFile(prefix, file) {
+  const blob = await upload(`${prefix}/${Date.now()}-${sanitizeFilename(file.name)}`, file, {
+    access: "public",
+    contentType: file.type || "application/octet-stream",
+    handleUploadUrl: "/api/upload",
+    multipart: file.size > multipartThreshold,
+  });
+
+  return blob.url;
 }
 
 form.addEventListener("submit", async (event) => {
@@ -75,31 +93,29 @@ form.addEventListener("submit", async (event) => {
     let uploadedSecondaryImageUrls = [];
 
     if (!manualMainImageUrl || secondaryImage1.size > 0 || secondaryImage2.size > 0) {
-      const uploadFormData = new FormData();
+      try {
+        const uploads = [
+          uploadImageFile("secondary-images", secondaryImage1),
+          uploadImageFile("secondary-images", secondaryImage2),
+        ];
 
-      if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
-        uploadFormData.append("mainImage", mainImageFile);
-      }
+        if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
+          uploads.unshift(uploadImageFile("main-images", mainImageFile));
+        }
 
-      uploadFormData.append("secondaryImage1", secondaryImage1);
-      uploadFormData.append("secondaryImage2", secondaryImage2);
+        const uploadedUrls = await Promise.all(uploads);
 
-      const uploadResponse = await fetch("/api/upload", {
-        method: "POST",
-        body: uploadFormData,
-      });
-
-      const uploadData = await readApiResponse(uploadResponse);
-
-      if (!uploadResponse.ok) {
-        messageNode.textContent = uploadData.error || "圖片上傳失敗。";
+        if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
+          uploadedMainImageUrl = uploadedUrls[0] || "";
+          uploadedSecondaryImageUrls = uploadedUrls.slice(1);
+        } else {
+          uploadedSecondaryImageUrls = uploadedUrls;
+        }
+      } catch (error) {
+        messageNode.textContent =
+          error instanceof Error ? error.message : "圖片上傳失敗。";
         return;
       }
-
-      uploadedMainImageUrl = uploadedMainImageUrl || uploadData.mainImageUrl || "";
-      uploadedSecondaryImageUrls = Array.isArray(uploadData.secondaryImageUrls)
-        ? uploadData.secondaryImageUrls
-        : [];
     }
 
     const payload = {
@@ -133,8 +149,8 @@ form.addEventListener("submit", async (event) => {
     messageNode.textContent = `已生成，UID: ${data.uid || "unknown"}`;
     resultImage.src = data.imageUrl;
     resultImage.hidden = false;
-      resultLink.href = data.imageUrl;
-      resultLink.hidden = false;
+    resultLink.href = data.imageUrl;
+    resultLink.hidden = false;
   } catch (error) {
     messageNode.textContent =
       error instanceof Error ? error.message : "連線失敗，請檢查伺服器與網路。";

@@ -55,6 +55,16 @@ async function readRequestBody(req) {
   }
 }
 
+async function readRequestText(req) {
+  let raw = "";
+
+  for await (const chunk of req) {
+    raw += chunk;
+  }
+
+  return raw;
+}
+
 function serveStaticFile(res, filePath) {
   if (!fs.existsSync(filePath)) {
     res.statusCode = 404;
@@ -80,6 +90,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === "/api/upload") {
+    req.body = await readRequestText(req);
     return uploadHandler(req, createResponse(res));
   }
 

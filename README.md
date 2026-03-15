@@ -88,8 +88,8 @@ items1,items2,items3
 
 注意：
 
-- 目前這版使用 Vercel Blob 做 server upload，再把 Blob 的公開 URL 傳給 Bannerbear。
-- Vercel 文件說明 Vercel Functions 的 request body 上限是 4.5 MB；如果你要傳更大的圖，之後應改成 Vercel Blob client uploads。
+- 目前這版使用 Vercel Blob client uploads，圖片由瀏覽器直接傳到 Blob，再把 Blob 的公開 URL 傳給 Bannerbear。
+- 這樣可避開 Vercel Functions 的 request body 限制，較適合圖片上傳場景。
 
 ## 專案結構
 
