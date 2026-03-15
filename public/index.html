@@ -13,8 +13,9 @@
         <h1>快速排版並生成 Banner</h1>
         <p class="intro">
           先在 Bannerbear 建一個 template，並將圖層命名為
-          <code>title</code>、<code>subtitle</code>、<code>photo</code>，然後把 API
-          key 與 template id 放進 <code>.env</code>。
+          <code>title</code>、<code>subtitle</code>、<code>photo_main</code>，
+          以及 <code>photo_sub_1</code> 到 <code>photo_sub_5</code>，然後把 API key
+          與 template id 放進 <code>.env</code> 或 Vercel 環境變數。
         </p>
 
         <div id="status" class="status">檢查設定中...</div>
@@ -31,10 +32,29 @@
           </label>
 
           <label>
-            背景圖 URL
+            主圖
+            <input id="mainImage" name="mainImage" type="file" accept="image/*" required />
+          </label>
+
+          <label>
+            副圖（1 到 5 張）
             <input
-              id="imageUrl"
-              name="imageUrl"
+              id="secondaryImages"
+              name="secondaryImages"
+              type="file"
+              accept="image/*"
+              multiple
+              required
+            />
+          </label>
+
+          <p class="helper">最多 5 張副圖。系統會依序對應到 photo_sub_1 到 photo_sub_5。</p>
+
+          <label>
+            或手動指定主圖 URL
+            <input
+              id="mainImageUrl"
+              name="mainImageUrl"
               type="url"
               placeholder="https://images.unsplash.com/..."
             />

@@ -7,6 +7,7 @@ dotenv.config();
 
 const configHandler = require("./api/config");
 const renderHandler = require("./api/render");
+const uploadHandler = require("./api/upload");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -76,6 +77,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/render") {
     req.body = await readRequestBody(req);
     return renderHandler(req, createResponse(res));
+  }
+
+  if (url.pathname === "/api/upload") {
+    return uploadHandler(req, createResponse(res));
   }
 
   const safePath = url.pathname === "/" ? "/index.html" : url.pathname;

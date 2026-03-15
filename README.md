@@ -5,6 +5,7 @@
 ## 功能
 
 - 輸入標題、副標與背景圖 URL
+- 上傳 1 張主圖與 1 到 5 張副圖
 - 呼叫 Bannerbear 同步 API 直接生成圖片
 - 生成後立即預覽並可在新分頁打開結果
 - 支援本機開發與 Vercel 部署
@@ -15,7 +16,12 @@
 2. 建議在該 template 裡建立以下圖層名稱：
    - `title`
    - `subtitle`
-   - `photo`
+   - `photo_main`
+   - `photo_sub_1`
+   - `photo_sub_2`
+   - `photo_sub_3`
+   - `photo_sub_4`
+   - `photo_sub_5`
 
 如果你使用不同圖層名稱，可以在 `.env` 或 Vercel Environment Variables 裡改成自己的名稱。
 
@@ -38,7 +44,9 @@ BANNERBEAR_TEMPLATE_ID=YOUR_TEMPLATE_ID
 BANNERBEAR_API_BASE=https://sync.api.bannerbear.com
 TITLE_LAYER_NAME=title
 SUBTITLE_LAYER_NAME=subtitle
-IMAGE_LAYER_NAME=photo
+MAIN_IMAGE_LAYER_NAME=photo_main
+SECONDARY_IMAGE_LAYER_NAMES=photo_sub_1,photo_sub_2,photo_sub_3,photo_sub_4,photo_sub_5
+BLOB_READ_WRITE_TOKEN=YOUR_VERCEL_BLOB_READ_WRITE_TOKEN
 ```
 
 ## 部署到 Vercel
@@ -52,7 +60,9 @@ IMAGE_LAYER_NAME=photo
    - `BANNERBEAR_API_BASE`
    - `TITLE_LAYER_NAME`
    - `SUBTITLE_LAYER_NAME`
-   - `IMAGE_LAYER_NAME`
+    - `MAIN_IMAGE_LAYER_NAME`
+    - `SECONDARY_IMAGE_LAYER_NAMES`
+    - `BLOB_READ_WRITE_TOKEN`
 5. 重新部署。
 
 `BANNERBEAR_API_BASE` 建議填：
@@ -61,9 +71,21 @@ IMAGE_LAYER_NAME=photo
 https://sync.api.bannerbear.com
 ```
 
+`SECONDARY_IMAGE_LAYER_NAMES` 範例值：
+
+```env
+photo_sub_1,photo_sub_2,photo_sub_3,photo_sub_4,photo_sub_5
+```
+
+注意：
+
+- 目前這版使用 Vercel Blob 做 server upload，再把 Blob 的公開 URL 傳給 Bannerbear。
+- Vercel 文件說明 Vercel Functions 的 request body 上限是 4.5 MB；如果你要傳更大的圖，之後應改成 Vercel Blob client uploads。
+
 ## 專案結構
 
 - `public/`: 靜態前端頁面
+- `api/upload.js`: 上傳主圖與副圖到 Vercel Blob
 - `api/config.js`: 讀取部署設定
 - `api/render.js`: 呼叫 Bannerbear API
 - `local-dev-server.js`: 本機開發 server

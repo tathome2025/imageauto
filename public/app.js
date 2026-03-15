@@ -32,13 +32,65 @@ form.addEventListener("submit", async (event) => {
   resultLink.hidden = true;
 
   const formData = new FormData(form);
-  const payload = {
-    title: formData.get("title")?.toString().trim(),
-    subtitle: formData.get("subtitle")?.toString().trim(),
-    imageUrl: formData.get("imageUrl")?.toString().trim(),
-  };
 
   try {
+    const mainImageFile = formData.get("mainImage");
+    const secondaryImageFiles = formData.getAll("secondaryImages");
+    const manualMainImageUrl = formData.get("mainImageUrl")?.toString().trim();
+
+    const actualSecondaryFiles = secondaryImageFiles.filter(
+      (file) => file instanceof File && file.size > 0,
+    );
+
+    if (!manualMainImageUrl && (!(mainImageFile instanceof File) || mainImageFile.size === 0)) {
+      messageNode.textContent = "請提供 1 張主圖。";
+      return;
+    }
+
+    if (actualSecondaryFiles.length < 1 || actualSecondaryFiles.length > 5) {
+      messageNode.textContent = "請上傳 1 到 5 張副圖。";
+      return;
+    }
+
+    let uploadedMainImageUrl = manualMainImageUrl;
+    let uploadedSecondaryImageUrls = [];
+
+    if (!manualMainImageUrl || actualSecondaryFiles.length > 0) {
+      const uploadFormData = new FormData();
+
+      if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
+        uploadFormData.append("mainImage", mainImageFile);
+      }
+
+      for (const file of actualSecondaryFiles) {
+        uploadFormData.append("secondaryImages", file);
+      }
+
+      const uploadResponse = await fetch("/api/upload", {
+        method: "POST",
+        body: uploadFormData,
+      });
+
+      const uploadData = await uploadResponse.json();
+
+      if (!uploadResponse.ok) {
+        messageNode.textContent = uploadData.error || "圖片上傳失敗。";
+        return;
+      }
+
+      uploadedMainImageUrl = uploadedMainImageUrl || uploadData.mainImageUrl || "";
+      uploadedSecondaryImageUrls = Array.isArray(uploadData.secondaryImageUrls)
+        ? uploadData.secondaryImageUrls
+        : [];
+    }
+
+    const payload = {
+      title: formData.get("title")?.toString().trim(),
+      subtitle: formData.get("subtitle")?.toString().trim(),
+      mainImageUrl: uploadedMainImageUrl,
+      secondaryImageUrls: uploadedSecondaryImageUrls,
+    };
+
     const response = await fetch("/api/render", {
       method: "POST",
       headers: {

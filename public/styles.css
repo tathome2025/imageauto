@@ -70,8 +70,14 @@ h1 {
 
 .intro,
 .message,
-.status {
+.status,
+.helper {
   color: var(--muted);
+}
+
+.helper {
+  margin: -6px 0 4px;
+  font-size: 13px;
 }
 
 .status {
