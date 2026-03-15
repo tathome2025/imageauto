@@ -5,10 +5,22 @@ const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
 
+async function readApiResponse(response) {
+  const raw = await response.text();
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {
+      error: raw || `Request failed with status ${response.status}.`,
+    };
+  }
+}
+
 async function loadConfig() {
   try {
     const response = await fetch("/api/config");
-    const data = await response.json();
+    const data = await readApiResponse(response);
 
     if (data.configured) {
       statusNode.textContent = `已連接 template: ${data.templateId}`;
@@ -77,7 +89,7 @@ form.addEventListener("submit", async (event) => {
         body: uploadFormData,
       });
 
-      const uploadData = await uploadResponse.json();
+      const uploadData = await readApiResponse(uploadResponse);
 
       if (!uploadResponse.ok) {
         messageNode.textContent = uploadData.error || "圖片上傳失敗。";
@@ -106,7 +118,7 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
+    const data = await readApiResponse(response);
 
     if (!response.ok) {
       messageNode.textContent = data.error || "生成失敗。";
@@ -121,10 +133,11 @@ form.addEventListener("submit", async (event) => {
     messageNode.textContent = `已生成，UID: ${data.uid || "unknown"}`;
     resultImage.src = data.imageUrl;
     resultImage.hidden = false;
-    resultLink.href = data.imageUrl;
-    resultLink.hidden = false;
+      resultLink.href = data.imageUrl;
+      resultLink.hidden = false;
   } catch (error) {
-    messageNode.textContent = "連線失敗，請檢查伺服器與網路。";
+    messageNode.textContent =
+      error instanceof Error ? error.message : "連線失敗，請檢查伺服器與網路。";
   } finally {
     submitButton.disabled = false;
   }
