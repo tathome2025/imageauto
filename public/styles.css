@@ -108,6 +108,19 @@ label {
   font-size: 14px;
 }
 
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.toggle input {
+  width: auto;
+  margin: 0;
+}
+
 input {
   width: 100%;
   border: 1px solid var(--line);

@@ -43,6 +43,10 @@ function sanitizeFilename(filename) {
   return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 
+function isChecked(formData, name) {
+  return formData.get(name) === "on";
+}
+
 async function uploadImageFile(prefix, file) {
   const blob = await upload(`${prefix}/${Date.now()}-${sanitizeFilename(file.name)}`, file, {
     access: "public",
@@ -68,49 +72,93 @@ form.addEventListener("submit", async (event) => {
     const secondaryImage1 = formData.get("secondaryImage1");
     const secondaryImage2 = formData.get("secondaryImage2");
     const manualMainImageUrl = formData.get("mainImageUrl")?.toString().trim();
-    const itemTexts = [
-      formData.get("item1")?.toString().trim(),
-      formData.get("item2")?.toString().trim(),
-      formData.get("item3")?.toString().trim(),
+    const itemEntries = [
+      {
+        text: formData.get("item1")?.toString().trim(),
+        show: isChecked(formData, "showItem1"),
+      },
+      {
+        text: formData.get("item2")?.toString().trim(),
+        show: isChecked(formData, "showItem2"),
+      },
+      {
+        text: formData.get("item3")?.toString().trim(),
+        show: isChecked(formData, "showItem3"),
+      },
     ];
+    const showMainImage = isChecked(formData, "showMainImage");
+    const showSecondaryImage1 = isChecked(formData, "showSecondaryImage1");
+    const showSecondaryImage2 = isChecked(formData, "showSecondaryImage2");
 
-    if (!manualMainImageUrl && (!(mainImageFile instanceof File) || mainImageFile.size === 0)) {
+    if (
+      showMainImage &&
+      !manualMainImageUrl &&
+      (!(mainImageFile instanceof File) || mainImageFile.size === 0)
+    ) {
       messageNode.textContent = "請提供 1 張主圖。";
       return;
     }
 
-    if (!(secondaryImage1 instanceof File) || secondaryImage1.size === 0) {
+    if (
+      showSecondaryImage1 &&
+      (!(secondaryImage1 instanceof File) || secondaryImage1.size === 0)
+    ) {
       messageNode.textContent = "請上傳副圖 1。";
       return;
     }
 
-    if (!(secondaryImage2 instanceof File) || secondaryImage2.size === 0) {
+    if (
+      showSecondaryImage2 &&
+      (!(secondaryImage2 instanceof File) || secondaryImage2.size === 0)
+    ) {
       messageNode.textContent = "請上傳副圖 2。";
       return;
     }
 
     let uploadedMainImageUrl = manualMainImageUrl;
-    let uploadedSecondaryImageUrls = [];
+    const uploadedSecondaryImageUrls = ["", ""];
 
-    if (!manualMainImageUrl || secondaryImage1.size > 0 || secondaryImage2.size > 0) {
+    if (
+      (showMainImage &&
+        !manualMainImageUrl &&
+        mainImageFile instanceof File &&
+        mainImageFile.size > 0) ||
+      (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) ||
+      (showSecondaryImage2 && secondaryImage2 instanceof File && secondaryImage2.size > 0)
+    ) {
       try {
-        const uploads = [
-          uploadImageFile("secondary-images", secondaryImage1),
-          uploadImageFile("secondary-images", secondaryImage2),
-        ];
+        const uploadJobs = [];
 
-        if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
-          uploads.unshift(uploadImageFile("main-images", mainImageFile));
+        if (
+          showMainImage &&
+          !manualMainImageUrl &&
+          mainImageFile instanceof File &&
+          mainImageFile.size > 0
+        ) {
+          uploadJobs.push(
+            uploadImageFile("main-images", mainImageFile).then((url) => {
+              uploadedMainImageUrl = url;
+            }),
+          );
         }
 
-        const uploadedUrls = await Promise.all(uploads);
-
-        if (!manualMainImageUrl && mainImageFile instanceof File && mainImageFile.size > 0) {
-          uploadedMainImageUrl = uploadedUrls[0] || "";
-          uploadedSecondaryImageUrls = uploadedUrls.slice(1);
-        } else {
-          uploadedSecondaryImageUrls = uploadedUrls;
+        if (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) {
+          uploadJobs.push(
+            uploadImageFile("secondary-images", secondaryImage1).then((url) => {
+              uploadedSecondaryImageUrls[0] = url;
+            }),
+          );
         }
+
+        if (showSecondaryImage2 && secondaryImage2 instanceof File && secondaryImage2.size > 0) {
+          uploadJobs.push(
+            uploadImageFile("secondary-images", secondaryImage2).then((url) => {
+              uploadedSecondaryImageUrls[1] = url;
+            }),
+          );
+        }
+
+        await Promise.all(uploadJobs);
       } catch (error) {
         messageNode.textContent =
           error instanceof Error ? error.message : "圖片上傳失敗。";
@@ -121,9 +169,13 @@ form.addEventListener("submit", async (event) => {
     const payload = {
       title: formData.get("title")?.toString().trim(),
       subtitle: formData.get("subtitle")?.toString().trim(),
-      itemTexts,
-      mainImageUrl: uploadedMainImageUrl,
+      itemEntries,
+      mainImage: {
+        show: showMainImage,
+        imageUrl: showMainImage ? uploadedMainImageUrl : "",
+      },
       secondaryImageUrls: uploadedSecondaryImageUrls,
+      secondaryImageVisibility: [showSecondaryImage1, showSecondaryImage2],
     };
 
     const response = await fetch("/api/render", {

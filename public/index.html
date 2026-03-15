@@ -36,30 +36,54 @@
             Product Item 1
             <input id="item1" name="item1" type="text" placeholder="例如 Premium Interior" />
           </label>
+          <label class="toggle">
+            <input id="showItem1" name="showItem1" type="checkbox" checked />
+            顯示 items1
+          </label>
 
           <label>
             Product Item 2
             <input id="item2" name="item2" type="text" placeholder="例如 18-inch Wheels" />
+          </label>
+          <label class="toggle">
+            <input id="showItem2" name="showItem2" type="checkbox" checked />
+            顯示 items2
           </label>
 
           <label>
             Product Item 3
             <input id="item3" name="item3" type="text" placeholder="例如 Autopilot Ready" />
           </label>
+          <label class="toggle">
+            <input id="showItem3" name="showItem3" type="checkbox" checked />
+            顯示 items3
+          </label>
 
           <label>
             主圖
             <input id="mainImage" name="mainImage" type="file" accept="image/*" required />
+          </label>
+          <label class="toggle">
+            <input id="showMainImage" name="showMainImage" type="checkbox" checked />
+            顯示 car_image
           </label>
 
           <label>
             副圖 1
             <input id="secondaryImage1" name="secondaryImage1" type="file" accept="image/*" required />
           </label>
+          <label class="toggle">
+            <input id="showSecondaryImage1" name="showSecondaryImage1" type="checkbox" checked />
+            顯示 product1
+          </label>
 
           <label>
             副圖 2
             <input id="secondaryImage2" name="secondaryImage2" type="file" accept="image/*" required />
+          </label>
+          <label class="toggle">
+            <input id="showSecondaryImage2" name="showSecondaryImage2" type="checkbox" checked />
+            顯示 product2
           </label>
 
           <p class="helper">主圖對應 `car_image`，副圖 1/2 分別對應 `product1`、`product2`。</p>
