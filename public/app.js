@@ -6,6 +6,13 @@ const resultImage = document.getElementById("result-image");
 const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
+const mainImageInput = document.getElementById("mainImage");
+const plateEditor = document.getElementById("plate-editor");
+const plateStage = document.getElementById("plate-stage");
+const platePreviewImage = document.getElementById("plate-preview-image");
+const plateBox = document.getElementById("plate-box");
+const resetPlateBoxButton = document.getElementById("reset-plate-box");
+const maskPlateCheckbox = document.getElementById("maskPlate");
 const multipartThreshold = 4.5 * 1024 * 1024;
 const logoLayerNames = [
   "product_res",
@@ -31,6 +38,13 @@ const logoLayerNames = [
   "brand_byd",
   "bradn_audi",
 ];
+const plateMaskState = {
+  imageUrl: "",
+  naturalWidth: 0,
+  naturalHeight: 0,
+  box: { x: 0, y: 0, width: 0, height: 0 },
+  interaction: null,
+};
 
 async function readApiResponse(response) {
   const raw = await response.text();
@@ -67,6 +81,10 @@ function sanitizeFilename(filename) {
   return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
 function isChecked(formData, name) {
   return formData.get(name) === "on";
 }
@@ -81,6 +99,176 @@ async function uploadImageFile(prefix, file) {
 
   return blob.url;
 }
+
+function updatePlateBox() {
+  plateBox.style.left = `${plateMaskState.box.x}px`;
+  plateBox.style.top = `${plateMaskState.box.y}px`;
+  plateBox.style.width = `${plateMaskState.box.width}px`;
+  plateBox.style.height = `${plateMaskState.box.height}px`;
+}
+
+function resetPlateBox() {
+  const stageWidth = platePreviewImage.clientWidth || plateStage.clientWidth || 0;
+  const stageHeight = platePreviewImage.clientHeight || plateStage.clientHeight || 0;
+
+  if (!stageWidth || !stageHeight) {
+    return;
+  }
+
+  const width = Math.max(80, stageWidth * 0.28);
+  const height = Math.max(28, stageHeight * 0.1);
+  plateMaskState.box = {
+    width,
+    height,
+    x: (stageWidth - width) / 2,
+    y: stageHeight * 0.72,
+  };
+  updatePlateBox();
+}
+
+function openPlateEditor(file) {
+  if (plateMaskState.imageUrl) {
+    URL.revokeObjectURL(plateMaskState.imageUrl);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  plateMaskState.imageUrl = objectUrl;
+  plateEditor.hidden = false;
+  platePreviewImage.src = objectUrl;
+}
+
+async function createMaskedMainImage(file) {
+  if (!maskPlateCheckbox.checked || !plateMaskState.naturalWidth || !plateMaskState.naturalHeight) {
+    return file;
+  }
+
+  const stageWidth = platePreviewImage.clientWidth;
+  const stageHeight = platePreviewImage.clientHeight;
+
+  if (!stageWidth || !stageHeight) {
+    return file;
+  }
+
+  const scaleX = plateMaskState.naturalWidth / stageWidth;
+  const scaleY = plateMaskState.naturalHeight / stageHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = plateMaskState.naturalWidth;
+  canvas.height = plateMaskState.naturalHeight;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("無法建立主圖處理畫布。");
+  }
+
+  const imageBitmap = await createImageBitmap(file);
+  context.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#ffffff";
+  context.fillRect(
+    Math.round(plateMaskState.box.x * scaleX),
+    Math.round(plateMaskState.box.y * scaleY),
+    Math.round(plateMaskState.box.width * scaleX),
+    Math.round(plateMaskState.box.height * scaleY),
+  );
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (maskedBlob) => {
+        if (maskedBlob) {
+          resolve(maskedBlob);
+          return;
+        }
+        reject(new Error("主圖遮牌失敗。"));
+      },
+      file.type || "image/jpeg",
+      0.95,
+    );
+  });
+
+  return new File([blob], file.name, {
+    type: blob.type || file.type || "image/jpeg",
+  });
+}
+
+platePreviewImage.addEventListener("load", () => {
+  plateMaskState.naturalWidth = platePreviewImage.naturalWidth;
+  plateMaskState.naturalHeight = platePreviewImage.naturalHeight;
+  resetPlateBox();
+});
+
+mainImageInput.addEventListener("change", () => {
+  const file = mainImageInput.files?.[0];
+
+  if (!file) {
+    if (plateMaskState.imageUrl) {
+      URL.revokeObjectURL(plateMaskState.imageUrl);
+      plateMaskState.imageUrl = "";
+    }
+    plateEditor.hidden = true;
+    return;
+  }
+
+  openPlateEditor(file);
+});
+
+resetPlateBoxButton.addEventListener("click", () => {
+  resetPlateBox();
+});
+
+plateBox.addEventListener("pointerdown", (event) => {
+  const target = event.target;
+  const mode =
+    target instanceof HTMLElement && target.classList.contains("plate-box__handle")
+      ? "resize"
+      : "move";
+  plateMaskState.interaction = {
+    mode,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startBox: { ...plateMaskState.box },
+  };
+  plateBox.setPointerCapture(event.pointerId);
+});
+
+plateBox.addEventListener("pointermove", (event) => {
+  if (!plateMaskState.interaction || plateMaskState.interaction.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const stageWidth = platePreviewImage.clientWidth;
+  const stageHeight = platePreviewImage.clientHeight;
+  const deltaX = event.clientX - plateMaskState.interaction.startX;
+  const deltaY = event.clientY - plateMaskState.interaction.startY;
+  const nextBox = { ...plateMaskState.interaction.startBox };
+
+  if (plateMaskState.interaction.mode === "move") {
+    nextBox.x = clamp(nextBox.x + deltaX, 0, stageWidth - nextBox.width);
+    nextBox.y = clamp(nextBox.y + deltaY, 0, stageHeight - nextBox.height);
+  } else {
+    nextBox.width = clamp(nextBox.width + deltaX, 56, stageWidth - nextBox.x);
+    nextBox.height = clamp(nextBox.height + deltaY, 24, stageHeight - nextBox.y);
+  }
+
+  plateMaskState.box = nextBox;
+  updatePlateBox();
+});
+
+function endPlateInteraction(event) {
+  if (!plateMaskState.interaction || plateMaskState.interaction.pointerId !== event.pointerId) {
+    return;
+  }
+
+  plateMaskState.interaction = null;
+  plateBox.releasePointerCapture(event.pointerId);
+}
+
+plateBox.addEventListener("pointerup", endPlateInteraction);
+plateBox.addEventListener("pointercancel", endPlateInteraction);
+window.addEventListener("resize", () => {
+  if (!plateEditor.hidden) {
+    resetPlateBox();
+  }
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -162,8 +350,9 @@ form.addEventListener("submit", async (event) => {
           mainImageFile instanceof File &&
           mainImageFile.size > 0
         ) {
+          const preparedMainImage = await createMaskedMainImage(mainImageFile);
           uploadJobs.push(
-            uploadImageFile("main-images", mainImageFile).then((url) => {
+            uploadImageFile("main-images", preparedMainImage).then((url) => {
               uploadedMainImageUrl = url;
             }),
           );

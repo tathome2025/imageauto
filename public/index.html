@@ -61,16 +61,35 @@
 
           <label>
             主圖
-            <input id="mainImage" name="mainImage" type="file" accept="image/*" required />
+            <input id="mainImage" name="mainImage" type="file" accept="image/*" />
           </label>
           <label class="toggle">
             <input id="showMainImage" name="showMainImage" type="checkbox" checked />
             顯示 car_image
           </label>
+          <label class="toggle">
+            <input id="maskPlate" name="maskPlate" type="checkbox" checked />
+            主圖車牌遮白
+          </label>
+          <div id="plate-editor" class="plate-editor" hidden>
+            <div class="plate-editor__header">
+              <strong>車牌遮罩</strong>
+              <button id="reset-plate-box" class="ghost-button" type="button">重設白框</button>
+            </div>
+            <p class="helper">
+              拖動白框到車牌位置，右下角可調整大小。送出時會先把這個白框套用到主圖。
+            </p>
+            <div id="plate-stage" class="plate-stage">
+              <img id="plate-preview-image" alt="Main image plate masking preview" />
+              <div id="plate-box" class="plate-box">
+                <div class="plate-box__handle" aria-hidden="true"></div>
+              </div>
+            </div>
+          </div>
 
           <label>
             副圖 1
-            <input id="secondaryImage1" name="secondaryImage1" type="file" accept="image/*" required />
+            <input id="secondaryImage1" name="secondaryImage1" type="file" accept="image/*" />
           </label>
           <label class="toggle">
             <input id="showSecondaryImage1" name="showSecondaryImage1" type="checkbox" checked />
@@ -79,7 +98,7 @@
 
           <label>
             副圖 2
-            <input id="secondaryImage2" name="secondaryImage2" type="file" accept="image/*" required />
+            <input id="secondaryImage2" name="secondaryImage2" type="file" accept="image/*" />
           </label>
           <label class="toggle">
             <input id="showSecondaryImage2" name="showSecondaryImage2" type="checkbox" checked />
