@@ -73,6 +73,7 @@ const editors = {
   mainImage: createImageEditor("mainImage", { isMain: true, toggleId: "showMainImage" }),
   secondaryImage1: createImageEditor("secondaryImage1", { toggleId: "showSecondaryImage1" }),
   secondaryImage2: createImageEditor("secondaryImage2", { toggleId: "showSecondaryImage2" }),
+  secondaryImage3: createImageEditor("secondaryImage3", { toggleId: "showSecondaryImage3" }),
 };
 
 function clamp(value, min, max) {
@@ -537,6 +538,7 @@ form.addEventListener("submit", async (event) => {
     const showMainImage = isChecked("showMainImage");
     const showSecondaryImage1 = isChecked("showSecondaryImage1");
     const showSecondaryImage2 = isChecked("showSecondaryImage2");
+    const showSecondaryImage3 = isChecked("showSecondaryImage3");
 
     if (showMainImage && !editors.mainImage.file) {
       messageNode.textContent = "請先上傳主圖。";
@@ -549,13 +551,18 @@ form.addEventListener("submit", async (event) => {
     }
 
     if (showSecondaryImage2 && !editors.secondaryImage2.file) {
-      messageNode.textContent = "請先上傳副圖 2。";
+      messageNode.textContent = "請先上傳副圖 2-1。";
+      return;
+    }
+
+    if (showSecondaryImage3 && !editors.secondaryImage3.file) {
+      messageNode.textContent = "請先上傳副圖 2-2。";
       return;
     }
 
     const uploadJobs = [];
     let uploadedMainImageUrl = "";
-    const uploadedSecondaryImageUrls = ["", ""];
+    const uploadedSecondaryImageUrls = ["", "", ""];
 
     if (showMainImage) {
       const renderedMain = await renderSquareFile(editors.mainImage, {
@@ -586,6 +593,15 @@ form.addEventListener("submit", async (event) => {
       );
     }
 
+    if (showSecondaryImage3) {
+      const renderedSecondary3 = await renderSquareFile(editors.secondaryImage3);
+      uploadJobs.push(
+        uploadImageFile("secondary-images", renderedSecondary3).then((url) => {
+          uploadedSecondaryImageUrls[2] = url;
+        }),
+      );
+    }
+
     await Promise.all(uploadJobs);
 
     const logoVisibility = Object.fromEntries(
@@ -612,7 +628,7 @@ form.addEventListener("submit", async (event) => {
         imageUrl: showMainImage ? uploadedMainImageUrl : "",
       },
       secondaryImageUrls: uploadedSecondaryImageUrls,
-      secondaryImageVisibility: [showSecondaryImage1, showSecondaryImage2],
+      secondaryImageVisibility: [showSecondaryImage1, showSecondaryImage2, showSecondaryImage3],
       logoVisibility,
     };
 

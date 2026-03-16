@@ -14,8 +14,9 @@
         <p class="intro">
           先在 Bannerbear 建一個 template，並將圖層命名為
           <code>car_model</code>、<code>car_brand</code>、<code>car_image</code>、
-          <code>product1</code>、<code>product2</code>、<code>items1</code>、
-          <code>items2</code>、<code>items3</code>，以及對應 logo layers。
+          <code>product1</code>、<code>product2</code>、<code>product3</code>、
+          <code>items1</code>、<code>items2</code>、<code>items3</code>，以及對應
+          logo layers。
         </p>
         <div id="status" class="status">檢查設定中...</div>
       </section>
@@ -121,7 +122,7 @@
           <article class="image-card">
             <div class="image-card__header">
               <div>
-                <h3>副圖 2</h3>
+                <h3>副圖 2-1</h3>
                 <p>對應 <code>product2</code></p>
               </div>
               <label class="toggle compact">
@@ -153,7 +154,45 @@
               <img id="image-secondaryImage2" alt="Secondary image 2 editor preview" hidden />
             </div>
 
-            <div id="status-secondaryImage2" class="editor-status">尚未選擇副圖 2</div>
+            <div id="status-secondaryImage2" class="editor-status">尚未選擇副圖 2-1</div>
+          </article>
+
+          <article class="image-card">
+            <div class="image-card__header">
+              <div>
+                <h3>副圖 2-2</h3>
+                <p>對應 <code>product3</code></p>
+              </div>
+              <label class="toggle compact">
+                <input id="showSecondaryImage3" name="showSecondaryImage3" type="checkbox" />
+                顯示
+              </label>
+            </div>
+
+            <input id="secondaryImage3" name="secondaryImage3" type="file" accept="image/*" hidden />
+
+            <button id="dropzone-secondaryImage3" class="dropzone" type="button">
+              <strong>拖拉副圖 2-2 到這裡</strong>
+              <span>或點擊選擇圖片</span>
+            </button>
+
+            <div class="editor-toolbar">
+              <button id="reset-view-secondaryImage3" class="ghost-button" type="button">重設視圖</button>
+            </div>
+
+            <label class="zoom-control">
+              縮放
+              <input id="zoom-secondaryImage3" type="range" min="1" max="3" step="0.01" value="1" />
+            </label>
+
+            <div id="stage-secondaryImage3" class="editor-stage">
+              <div id="placeholder-secondaryImage3" class="editor-placeholder">
+                副圖 2-2 會在這裡裁成正方型。
+              </div>
+              <img id="image-secondaryImage3" alt="Secondary image 3 editor preview" hidden />
+            </div>
+
+            <div id="status-secondaryImage3" class="editor-status">尚未選擇副圖 2-2</div>
           </article>
         </div>
       </section>

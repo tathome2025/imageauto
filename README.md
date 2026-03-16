@@ -6,7 +6,7 @@
 
 - 輸入 `Car Model`、`Car Brand`
 - 輸入 3 個 `Product Items`
-- 上傳 1 張主圖與 2 張副圖
+- 上傳 1 張主圖與 3 張副圖
 - 呼叫 Bannerbear 同步 API 直接生成圖片
 - 生成後立即預覽並可在新分頁打開結果
 - 支援本機開發與 Vercel 部署
@@ -20,6 +20,7 @@
    - `car_image`
    - `product1`
    - `product2`
+   - `product3`
    - `items1`
    - `items2`
    - `items3`
@@ -46,7 +47,7 @@ BANNERBEAR_API_BASE=https://sync.api.bannerbear.com
 TITLE_LAYER_NAME=car_model
 SUBTITLE_LAYER_NAME=car_brand
 MAIN_IMAGE_LAYER_NAME=car_image
-SECONDARY_IMAGE_LAYER_NAMES=product1,product2
+SECONDARY_IMAGE_LAYER_NAMES=product1,product2,product3
 ITEM_LAYER_NAMES=items1,items2,items3
 BLOB_READ_WRITE_TOKEN=YOUR_VERCEL_BLOB_READ_WRITE_TOKEN
 ```
@@ -77,7 +78,7 @@ https://sync.api.bannerbear.com
 `SECONDARY_IMAGE_LAYER_NAMES` 範例值：
 
 ```env
-product1,product2
+product1,product2,product3
 ```
 
 `ITEM_LAYER_NAMES` 範例值：
@@ -94,7 +95,7 @@ items1,items2,items3
 ## 專案結構
 
 - `public/`: 靜態前端頁面
-- `api/upload.js`: 上傳主圖與兩張副圖到 Vercel Blob
+- `api/upload.js`: 上傳主圖與三張副圖到 Vercel Blob
 - `api/config.js`: 讀取部署設定
 - `api/render.js`: 呼叫 Bannerbear API
 - `local-dev-server.js`: 本機開發 server
