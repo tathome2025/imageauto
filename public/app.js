@@ -16,14 +16,7 @@ const platePointStatus = document.getElementById("plate-point-status");
 const resetPlatePointsButton = document.getElementById("reset-plate-points");
 const maskPlateCheckbox = document.getElementById("maskPlate");
 const multipartThreshold = 4.5 * 1024 * 1024;
-const logoLayerNames = [
-  "product_res",
-  "product_ur",
-  "product_army",
-  "product_NGK",
-  "product_endless",
-  "product_bmc",
-  "product_eibach",
+const brandLogoLayerNames = [
   "brand_benz",
   "brand_bmw",
   "brand_honda",
@@ -39,6 +32,19 @@ const logoLayerNames = [
   "brand_vw",
   "brand_byd",
   "bradn_audi",
+];
+const productLogoLayerNames = [
+  "product_res",
+  "product_ur",
+  "product_army",
+  "product_NGK",
+  "product_endless",
+  "product_bmc",
+  "product_eibach",
+];
+const logoLayerNames = [
+  ...productLogoLayerNames,
+  ...brandLogoLayerNames,
 ];
 const plateMaskState = {
   imageUrl: "",
@@ -84,6 +90,82 @@ function sanitizeFilename(filename) {
 
 function isChecked(formData, name) {
   return formData.get(name) === "on";
+}
+
+function syncCheckboxWithText(inputId, checkboxId) {
+  const input = document.getElementById(inputId);
+  const checkbox = document.getElementById(checkboxId);
+
+  if (!input || !checkbox) {
+    return;
+  }
+
+  const update = () => {
+    checkbox.checked = Boolean(input.value.trim());
+  };
+
+  input.addEventListener("input", update);
+  update();
+}
+
+function syncCheckboxWithFile(inputId, checkboxId) {
+  const input = document.getElementById(inputId);
+  const checkbox = document.getElementById(checkboxId);
+
+  if (!input || !checkbox) {
+    return;
+  }
+
+  const update = () => {
+    checkbox.checked = Boolean(input.files?.length);
+  };
+
+  input.addEventListener("change", update);
+  update();
+}
+
+function syncMainImageCheckbox() {
+  const fileInput = document.getElementById("mainImage");
+  const urlInput = document.getElementById("mainImageUrl");
+  const checkbox = document.getElementById("showMainImage");
+
+  if (!fileInput || !urlInput || !checkbox) {
+    return;
+  }
+
+  const update = () => {
+    checkbox.checked = Boolean(fileInput.files?.length || urlInput.value.trim());
+  };
+
+  fileInput.addEventListener("change", update);
+  urlInput.addEventListener("input", update);
+  update();
+}
+
+function setupExclusiveCheckboxes(names) {
+  names.forEach((name) => {
+    const checkbox = document.getElementById(name);
+    if (!checkbox) {
+      return;
+    }
+
+    checkbox.addEventListener("change", () => {
+      if (!checkbox.checked) {
+        return;
+      }
+
+      names.forEach((otherName) => {
+        if (otherName === name) {
+          return;
+        }
+
+        const other = document.getElementById(otherName);
+        if (other) {
+          other.checked = false;
+        }
+      });
+    });
+  });
 }
 
 async function uploadImageFile(prefix, file) {
@@ -215,6 +297,14 @@ platePreviewImage.addEventListener("load", () => {
   plateOverlay.setAttribute("viewBox", `0 0 ${platePreviewImage.clientWidth} ${platePreviewImage.clientHeight}`);
   clearPlatePoints();
 });
+
+syncCheckboxWithText("item1", "showItem1");
+syncCheckboxWithText("item2", "showItem2");
+syncCheckboxWithText("item3", "showItem3");
+syncMainImageCheckbox();
+syncCheckboxWithFile("secondaryImage1", "showSecondaryImage1");
+syncCheckboxWithFile("secondaryImage2", "showSecondaryImage2");
+setupExclusiveCheckboxes(brandLogoLayerNames);
 
 mainImageInput.addEventListener("change", () => {
   const file = mainImageInput.files?.[0];
