@@ -22,43 +22,7 @@
         <div id="status" class="status">檢查設定中...</div>
 
         <form id="render-form" class="form">
-          <label class="span-1">
-            Car Model
-            <input id="title" name="title" type="text" placeholder="例如 Tesla Model 3" />
-          </label>
-
-          <label class="span-1">
-            Car Brand
-            <input id="subtitle" name="subtitle" type="text" placeholder="例如 Tesla" />
-          </label>
-
-          <label class="span-1">
-            Product Item 1
-            <input id="item1" name="item1" type="text" placeholder="例如 Premium Interior" />
-          </label>
-          <label class="toggle">
-            <input id="showItem1" name="showItem1" type="checkbox" />
-            顯示 items1
-          </label>
-
-          <label class="span-1">
-            Product Item 2
-            <input id="item2" name="item2" type="text" placeholder="例如 18-inch Wheels" />
-          </label>
-          <label class="toggle">
-            <input id="showItem2" name="showItem2" type="checkbox" />
-            顯示 items2
-          </label>
-
-          <label class="span-1">
-            Product Item 3
-            <input id="item3" name="item3" type="text" placeholder="例如 Autopilot Ready" />
-          </label>
-          <label class="toggle">
-            <input id="showItem3" name="showItem3" type="checkbox" />
-            顯示 items3
-          </label>
-
+          <div class="section-title span-full">先處理相片</div>
           <label class="span-1">
             主圖
             <input id="mainImage" name="mainImage" type="file" accept="image/*" />
@@ -143,6 +107,16 @@
           <label class="toggle">
             <input id="showSecondaryImage2" name="showSecondaryImage2" type="checkbox" />
             顯示 product2
+          </label>
+
+          <label class="span-full">
+            或手動指定主圖 URL
+            <input
+              id="mainImageUrl"
+              name="mainImageUrl"
+              type="url"
+              placeholder="https://images.unsplash.com/..."
+            />
           </label>
 
           <section class="control-group">
@@ -241,17 +215,45 @@
             </label>
           </section>
 
-          <p class="helper">主圖對應 `car_image`，副圖 1/2 分別對應 `product1`、`product2`。</p>
-
-          <label class="span-full">
-            或手動指定主圖 URL
-            <input
-              id="mainImageUrl"
-              name="mainImageUrl"
-              type="url"
-              placeholder="https://images.unsplash.com/..."
-            />
+          <div class="section-title span-full">再填資料</div>
+          <label class="span-1">
+            Car Model
+            <input id="title" name="title" type="text" placeholder="例如 Tesla Model 3" />
           </label>
+
+          <label class="span-1">
+            Car Brand
+            <input id="subtitle" name="subtitle" type="text" placeholder="例如 Tesla" />
+          </label>
+
+          <label class="span-1">
+            Product Item 1
+            <input id="item1" name="item1" type="text" placeholder="例如 Premium Interior" />
+          </label>
+          <label class="toggle">
+            <input id="showItem1" name="showItem1" type="checkbox" />
+            顯示 items1
+          </label>
+
+          <label class="span-1">
+            Product Item 2
+            <input id="item2" name="item2" type="text" placeholder="例如 18-inch Wheels" />
+          </label>
+          <label class="toggle">
+            <input id="showItem2" name="showItem2" type="checkbox" />
+            顯示 items2
+          </label>
+
+          <label class="span-1">
+            Product Item 3
+            <input id="item3" name="item3" type="text" placeholder="例如 Autopilot Ready" />
+          </label>
+          <label class="toggle">
+            <input id="showItem3" name="showItem3" type="checkbox" />
+            顯示 items3
+          </label>
+
+          <p class="helper">主圖對應 `car_image`，副圖 1/2 分別對應 `product1`、`product2`。</p>
 
           <button id="submit-button" class="span-full" type="submit">生成圖片</button>
         </form>

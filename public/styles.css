@@ -89,6 +89,14 @@ h1 {
   font-size: 12px;
 }
 
+.section-title {
+  margin-top: 2px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
 .status {
   padding: 10px 12px;
   margin: 12px 0;
