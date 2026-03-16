@@ -6,17 +6,8 @@ const resultImage = document.getElementById("result-image");
 const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
-const mainImageInput = document.getElementById("mainImage");
-const plateEditor = document.getElementById("plate-editor");
-const plateStage = document.getElementById("plate-stage");
-const platePreviewImage = document.getElementById("plate-preview-image");
-const plateOverlay = document.getElementById("plate-overlay");
-const platePolygon = document.getElementById("plate-polygon");
-const platePointStatus = document.getElementById("plate-point-status");
-const resetPlatePointsButton = document.getElementById("reset-plate-points");
-const maskPlateCheckbox = document.getElementById("maskPlate");
 const multipartThreshold = 4.5 * 1024 * 1024;
-const cropperIds = ["mainImage", "secondaryImage1", "secondaryImage2"];
+
 const brandLogoControls = [
   { controlId: "brand_benz", layerNames: ["brand_benz"] },
   { controlId: "brand_bmw", layerNames: ["brand_bmw"] },
@@ -34,6 +25,7 @@ const brandLogoControls = [
   { controlId: "brand_byd", layerNames: ["brand_byd"] },
   { controlId: "brand_audi", layerNames: ["brand_audi", "bradn_audi"] },
 ];
+
 const productLogoLayerNames = [
   "product_res",
   "product_ur",
@@ -43,39 +35,58 @@ const productLogoLayerNames = [
   "product_bmc",
   "product_eibach",
 ];
-const logoLayerNames = [
-  ...productLogoLayerNames,
-  ...brandLogoControls.flatMap((control) => control.layerNames),
-];
-const plateMaskState = {
-  imageUrl: "",
-  naturalWidth: 0,
-  naturalHeight: 0,
-  points: [],
-};
-const cropperStates = Object.fromEntries(
-  cropperIds.map((id) => [
+
+function createImageEditor(id, options = {}) {
+  return {
     id,
-    {
-      id,
-      input: document.getElementById(id),
-      editor: document.getElementById(`crop-editor-${id}`),
-      stage: document.getElementById(`crop-stage-${id}`),
-      image: document.getElementById(`crop-image-${id}`),
-      zoom: document.getElementById(`crop-zoom-${id}`),
-      file: null,
-      imageUrl: "",
-      naturalWidth: 0,
-      naturalHeight: 0,
-      scale: 1,
-      baseScale: 1,
-      x: 0,
-      y: 0,
-      drag: null,
-      squareFile: null,
-    },
-  ]),
-);
+    isMain: Boolean(options.isMain),
+    input: document.getElementById(id),
+    dropzone: document.getElementById(`dropzone-${id}`),
+    stage: document.getElementById(`stage-${id}`),
+    image: document.getElementById(`image-${id}`),
+    placeholder: document.getElementById(`placeholder-${id}`),
+    zoom: document.getElementById(`zoom-${id}`),
+    resetView: document.getElementById(`reset-view-${id}`),
+    toggle: document.getElementById(options.toggleId),
+    status: document.getElementById(`status-${id}`),
+    maskToggle: options.isMain ? document.getElementById("maskPlate") : null,
+    modeCrop: options.isMain ? document.getElementById("mode-crop-mainImage") : null,
+    modePlate: options.isMain ? document.getElementById("mode-plate-mainImage") : null,
+    resetPlate: options.isMain ? document.getElementById("reset-plate-mainImage") : null,
+    overlay: options.isMain ? document.getElementById("overlay-mainImage") : null,
+    polygon: options.isMain ? document.getElementById("polygon-mainImage") : null,
+    file: null,
+    fileUrl: "",
+    naturalWidth: 0,
+    naturalHeight: 0,
+    baseScale: 1,
+    scale: 1,
+    x: 0,
+    y: 0,
+    drag: null,
+    mode: "crop",
+    platePoints: [],
+  };
+}
+
+const editors = {
+  mainImage: createImageEditor("mainImage", { isMain: true, toggleId: "showMainImage" }),
+  secondaryImage1: createImageEditor("secondaryImage1", { toggleId: "showSecondaryImage1" }),
+  secondaryImage2: createImageEditor("secondaryImage2", { toggleId: "showSecondaryImage2" }),
+};
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function sanitizeFilename(filename) {
+  return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+function isChecked(id) {
+  const node = document.getElementById(id);
+  return Boolean(node?.checked);
+}
 
 async function readApiResponse(response) {
   const raw = await response.text();
@@ -83,9 +94,7 @@ async function readApiResponse(response) {
   try {
     return JSON.parse(raw);
   } catch {
-    return {
-      error: raw || `Request failed with status ${response.status}.`,
-    };
+    return { error: raw || `Request failed with status ${response.status}.` };
   }
 }
 
@@ -102,79 +111,361 @@ async function loadConfig() {
 
     statusNode.textContent = "尚未設定 Bannerbear API key 或 template id。";
     statusNode.className = "status error";
-  } catch (error) {
+  } catch {
     statusNode.textContent = "無法讀取伺服器設定。";
     statusNode.className = "status error";
   }
 }
 
-function sanitizeFilename(filename) {
-  return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
+function setEditorStatus(editor, text) {
+  editor.status.textContent = text;
 }
 
-function isChecked(formData, name) {
-  return formData.get(name) === "on";
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function syncCheckboxWithText(inputId, checkboxId) {
-  const input = document.getElementById(inputId);
-  const checkbox = document.getElementById(checkboxId);
-
-  if (!input || !checkbox) {
+function clearPlatePoints(editor, text) {
+  if (!editor.isMain) {
     return;
   }
 
-  const update = () => {
-    checkbox.checked = Boolean(input.value.trim());
-  };
+  editor.platePoints = [];
+  editor.stage.querySelectorAll(".editor-point").forEach((node) => node.remove());
+  editor.polygon.setAttribute("points", "");
 
-  input.addEventListener("input", update);
-  update();
+  if (text) {
+    setEditorStatus(editor, text);
+  }
 }
 
-function syncCheckboxWithFile(inputId, checkboxId) {
-  const input = document.getElementById(inputId);
-  const checkbox = document.getElementById(checkboxId);
-
-  if (!input || !checkbox) {
+function renderPlatePoints(editor) {
+  if (!editor.isMain) {
     return;
   }
 
-  const update = () => {
-    checkbox.checked = Boolean(input.files?.length);
-  };
+  const size = editor.stage.clientWidth;
+  editor.stage.querySelectorAll(".editor-point").forEach((node) => node.remove());
 
-  input.addEventListener("change", update);
-  update();
+  editor.platePoints.forEach((point, index) => {
+    const marker = document.createElement("div");
+    marker.className = "editor-point";
+    marker.style.left = `${point.x * size}px`;
+    marker.style.top = `${point.y * size}px`;
+    marker.title = `角點 ${index + 1}`;
+    editor.stage.append(marker);
+  });
+
+  if (editor.platePoints.length === 4) {
+    editor.polygon.setAttribute(
+      "points",
+      editor.platePoints.map((point) => `${point.x * size},${point.y * size}`).join(" "),
+    );
+    setEditorStatus(editor, "已選取 4 個角點，可直接生成。");
+    return;
+  }
+
+  editor.polygon.setAttribute("points", "");
+  setEditorStatus(editor, `遮牌模式：已選 ${editor.platePoints.length} / 4 個角點`);
 }
 
-function setupExclusiveCheckboxes(names) {
-  names.forEach((name) => {
-    const checkbox = document.getElementById(name);
-    if (!checkbox) {
+function constrainEditorPosition(editor) {
+  const stageSize = editor.stage.clientWidth;
+  const imageWidth = editor.naturalWidth * editor.scale;
+  const imageHeight = editor.naturalHeight * editor.scale;
+  const minX = Math.min(0, stageSize - imageWidth);
+  const minY = Math.min(0, stageSize - imageHeight);
+
+  editor.x = clamp(editor.x, minX, 0);
+  editor.y = clamp(editor.y, minY, 0);
+}
+
+function renderEditor(editor) {
+  const hasFile = Boolean(editor.file);
+  editor.placeholder.hidden = hasFile;
+  editor.image.hidden = !hasFile;
+
+  if (!hasFile) {
+    if (editor.isMain) {
+      editor.overlay.hidden = true;
+    }
+    return;
+  }
+
+  editor.image.style.width = `${editor.naturalWidth * editor.scale}px`;
+  editor.image.style.height = `${editor.naturalHeight * editor.scale}px`;
+  editor.image.style.transform = `translate(${editor.x}px, ${editor.y}px)`;
+
+  if (editor.isMain) {
+    editor.overlay.hidden = false;
+    editor.stage.classList.toggle("is-plate-mode", editor.mode === "plate");
+    editor.modeCrop.classList.toggle("is-active", editor.mode === "crop");
+    editor.modePlate.classList.toggle("is-active", editor.mode === "plate");
+    renderPlatePoints(editor);
+  }
+}
+
+function fitEditor(editor) {
+  const stageSize = editor.stage.clientWidth;
+
+  if (!stageSize || !editor.naturalWidth || !editor.naturalHeight) {
+    return;
+  }
+
+  editor.baseScale = Math.max(stageSize / editor.naturalWidth, stageSize / editor.naturalHeight);
+  editor.scale = editor.baseScale * Number(editor.zoom.value || 1);
+  editor.x = (stageSize - editor.naturalWidth * editor.scale) / 2;
+  editor.y = (stageSize - editor.naturalHeight * editor.scale) / 2;
+  constrainEditorPosition(editor);
+  renderEditor(editor);
+}
+
+function invalidatePlate(editor) {
+  if (!editor.isMain || editor.platePoints.length === 0) {
+    return;
+  }
+
+  clearPlatePoints(editor, "裁圖已變更，請重新點選車牌四角。");
+}
+
+function setEditorFile(editor, file) {
+  if (editor.fileUrl) {
+    URL.revokeObjectURL(editor.fileUrl);
+  }
+
+  editor.file = file;
+  editor.fileUrl = URL.createObjectURL(file);
+  editor.image.src = editor.fileUrl;
+  editor.zoom.value = "1";
+  editor.toggle.checked = true;
+
+  if (editor.isMain) {
+    editor.mode = "crop";
+    clearPlatePoints(editor, "主圖已載入，請先裁圖。");
+  } else {
+    setEditorStatus(editor, "圖片已載入，可調整正方裁切範圍。");
+  }
+}
+
+function openFileDialog(editor) {
+  editor.input.click();
+}
+
+function handleDroppedFile(editor, file) {
+  if (!file || !file.type.startsWith("image/")) {
+    setEditorStatus(editor, "請拖拉圖片檔。");
+    return;
+  }
+
+  setEditorFile(editor, file);
+}
+
+function setupDropzone(editor) {
+  editor.dropzone.addEventListener("click", () => openFileDialog(editor));
+  editor.dropzone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    editor.dropzone.classList.add("is-dragover");
+  });
+  editor.dropzone.addEventListener("dragleave", () => {
+    editor.dropzone.classList.remove("is-dragover");
+  });
+  editor.dropzone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    editor.dropzone.classList.remove("is-dragover");
+    handleDroppedFile(editor, event.dataTransfer?.files?.[0]);
+  });
+  editor.input.addEventListener("change", () => {
+    handleDroppedFile(editor, editor.input.files?.[0]);
+  });
+}
+
+function setupEditorInteractions(editor) {
+  setupDropzone(editor);
+
+  editor.image.addEventListener("load", () => {
+    editor.naturalWidth = editor.image.naturalWidth;
+    editor.naturalHeight = editor.image.naturalHeight;
+    fitEditor(editor);
+  });
+
+  editor.zoom.addEventListener("input", () => {
+    if (!editor.file) {
       return;
     }
 
-    checkbox.addEventListener("change", () => {
-      if (!checkbox.checked) {
+    const stageSize = editor.stage.clientWidth;
+    const centerX = (stageSize / 2 - editor.x) / editor.scale;
+    const centerY = (stageSize / 2 - editor.y) / editor.scale;
+    editor.scale = editor.baseScale * Number(editor.zoom.value || 1);
+    editor.x = stageSize / 2 - centerX * editor.scale;
+    editor.y = stageSize / 2 - centerY * editor.scale;
+    constrainEditorPosition(editor);
+    invalidatePlate(editor);
+    renderEditor(editor);
+  });
+
+  editor.resetView.addEventListener("click", () => {
+    if (!editor.file) {
+      return;
+    }
+
+    editor.zoom.value = "1";
+    fitEditor(editor);
+    invalidatePlate(editor);
+  });
+
+  editor.stage.addEventListener("pointerdown", (event) => {
+    if (!editor.file || (editor.isMain && editor.mode !== "crop")) {
+      return;
+    }
+
+    editor.drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startImageX: editor.x,
+      startImageY: editor.y,
+    };
+    editor.stage.setPointerCapture(event.pointerId);
+  });
+
+  editor.stage.addEventListener("pointermove", (event) => {
+    if (!editor.drag || editor.drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    editor.x = editor.drag.startImageX + (event.clientX - editor.drag.startX);
+    editor.y = editor.drag.startImageY + (event.clientY - editor.drag.startY);
+    constrainEditorPosition(editor);
+    renderEditor(editor);
+  });
+
+  const endDrag = (event) => {
+    if (!editor.drag || editor.drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    editor.drag = null;
+    editor.stage.releasePointerCapture(event.pointerId);
+    invalidatePlate(editor);
+    renderEditor(editor);
+  };
+
+  editor.stage.addEventListener("pointerup", endDrag);
+  editor.stage.addEventListener("pointercancel", endDrag);
+
+  if (!editor.isMain) {
+    return;
+  }
+
+  editor.modeCrop.addEventListener("click", () => {
+    editor.mode = "crop";
+    setEditorStatus(editor, "裁圖模式：拖拉圖片與縮放，決定最終正方構圖。");
+    renderEditor(editor);
+  });
+
+  editor.modePlate.addEventListener("click", () => {
+    if (!editor.file) {
+      return;
+    }
+
+    editor.mode = "plate";
+    setEditorStatus(editor, "遮牌模式：依序點選車牌四個角。");
+    renderEditor(editor);
+  });
+
+  editor.resetPlate.addEventListener("click", () => {
+    clearPlatePoints(editor, "已清除角點，請重新點選。");
+  });
+
+  editor.stage.addEventListener("click", (event) => {
+    if (!editor.file || editor.mode !== "plate") {
+      return;
+    }
+
+    const bounds = editor.stage.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) {
+      return;
+    }
+
+    if (editor.platePoints.length >= 4) {
+      setEditorStatus(editor, "已選滿 4 個角點，如需重選請按「清除四角」。");
+      return;
+    }
+
+    editor.platePoints.push({
+      x: (event.clientX - bounds.left) / bounds.width,
+      y: (event.clientY - bounds.top) / bounds.height,
+    });
+    renderEditor(editor);
+  });
+}
+
+async function renderSquareFile(editor, options = {}) {
+  if (!editor.file) {
+    return null;
+  }
+
+  const outputSize = options.outputSize || 1200;
+  const stageSize = editor.stage.clientWidth;
+
+  if (!stageSize) {
+    return editor.file;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("無法建立圖片裁剪畫布。");
+  }
+
+  const imageBitmap = await createImageBitmap(editor.file);
+  const factor = outputSize / stageSize;
+  context.drawImage(
+    imageBitmap,
+    editor.x * factor,
+    editor.y * factor,
+    editor.naturalWidth * editor.scale * factor,
+    editor.naturalHeight * editor.scale * factor,
+  );
+
+  if (editor.isMain && options.applyPlateMask) {
+    if (editor.platePoints.length !== 4) {
+      throw new Error("請先在主圖點選車牌四個角。");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.beginPath();
+    editor.platePoints.forEach((point, index) => {
+      const x = point.x * outputSize;
+      const y = point.y * outputSize;
+
+      if (index === 0) {
+        context.moveTo(x, y);
         return;
       }
 
-      names.forEach((otherName) => {
-        if (otherName === name) {
+      context.lineTo(x, y);
+    });
+    context.closePath();
+    context.fill();
+  }
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) {
+          resolve(result);
           return;
         }
+        reject(new Error("圖片輸出失敗。"));
+      },
+      editor.file.type || "image/jpeg",
+      0.95,
+    );
+  });
 
-        const other = document.getElementById(otherName);
-        if (other) {
-          other.checked = false;
-        }
-      });
-    });
+  return new File([blob], editor.file.name, {
+    type: blob.type || editor.file.type || "image/jpeg",
   });
 }
 
@@ -189,402 +480,50 @@ async function uploadImageFile(prefix, file) {
   return blob.url;
 }
 
-function constrainCropperPosition(cropper) {
-  const stageSize = cropper.stage.clientWidth;
-  const imageWidth = cropper.naturalWidth * cropper.scale;
-  const imageHeight = cropper.naturalHeight * cropper.scale;
-  const minX = Math.min(0, stageSize - imageWidth);
-  const minY = Math.min(0, stageSize - imageHeight);
+function setupTextToggleSync(inputId, toggleId) {
+  const input = document.getElementById(inputId);
+  const toggle = document.getElementById(toggleId);
 
-  cropper.x = clamp(cropper.x, minX, 0);
-  cropper.y = clamp(cropper.y, minY, 0);
-}
-
-function renderCropper(cropper) {
-  if (!cropper.image) {
-    return;
-  }
-
-  cropper.image.style.width = `${cropper.naturalWidth * cropper.scale}px`;
-  cropper.image.style.height = `${cropper.naturalHeight * cropper.scale}px`;
-  cropper.image.style.transform = `translate(${cropper.x}px, ${cropper.y}px)`;
-}
-
-function fitCropper(cropper) {
-  const stageSize = cropper.stage.clientWidth;
-
-  if (!stageSize || !cropper.naturalWidth || !cropper.naturalHeight) {
-    return;
-  }
-
-  cropper.baseScale = Math.max(stageSize / cropper.naturalWidth, stageSize / cropper.naturalHeight);
-  cropper.scale = cropper.baseScale * Number(cropper.zoom.value || 1);
-  cropper.x = (stageSize - cropper.naturalWidth * cropper.scale) / 2;
-  cropper.y = (stageSize - cropper.naturalHeight * cropper.scale) / 2;
-  constrainCropperPosition(cropper);
-  renderCropper(cropper);
-}
-
-async function blobToFile(blob, filename, type) {
-  return new File([blob], filename, { type });
-}
-
-async function createSquareCroppedFile(cropperId, outputSize = 1200) {
-  const cropper = cropperStates[cropperId];
-
-  if (!cropper?.file) {
-    return null;
-  }
-
-  const stageSize = cropper.stage.clientWidth;
-
-  if (!stageSize) {
-    return cropper.file;
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = outputSize;
-  canvas.height = outputSize;
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error("無法建立圖片裁剪畫布。");
-  }
-
-  const imageBitmap = await createImageBitmap(cropper.file);
-  const factor = outputSize / stageSize;
-  context.drawImage(
-    imageBitmap,
-    cropper.x * factor,
-    cropper.y * factor,
-    cropper.naturalWidth * cropper.scale * factor,
-    cropper.naturalHeight * cropper.scale * factor,
-  );
-
-  const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (croppedBlob) => {
-        if (croppedBlob) {
-          resolve(croppedBlob);
-          return;
-        }
-        reject(new Error("圖片裁剪失敗。"));
-      },
-      cropper.file.type || "image/jpeg",
-      0.95,
-    );
-  });
-
-  const squareFile = await blobToFile(
-    blob,
-    cropper.file.name,
-    blob.type || cropper.file.type || "image/jpeg",
-  );
-  cropper.squareFile = squareFile;
-  return squareFile;
-}
-
-function clearPlatePoints() {
-  plateMaskState.points = [];
-  plateStage.querySelectorAll(".plate-point").forEach((node) => node.remove());
-  platePolygon.setAttribute("points", "");
-  platePointStatus.textContent = "尚未選取角點";
-}
-
-function renderPlatePoints() {
-  const stageWidth = platePreviewImage.clientWidth;
-  const stageHeight = platePreviewImage.clientHeight;
-
-  plateStage.querySelectorAll(".plate-point").forEach((node) => node.remove());
-
-  plateMaskState.points.forEach((point, index) => {
-    const marker = document.createElement("div");
-    marker.className = "plate-point";
-    marker.style.left = `${point.x * stageWidth}px`;
-    marker.style.top = `${point.y * stageHeight}px`;
-    marker.title = `角點 ${index + 1}`;
-    plateStage.append(marker);
-  });
-
-  if (plateMaskState.points.length === 4) {
-    platePolygon.setAttribute(
-      "points",
-      plateMaskState.points
-        .map((point) => `${point.x * stageWidth},${point.y * stageHeight}`)
-        .join(" "),
-    );
-    platePointStatus.textContent = "已選取 4 個角點";
-    return;
-  }
-
-  platePolygon.setAttribute("points", "");
-  platePointStatus.textContent = `已選取 ${plateMaskState.points.length} / 4 個角點`;
-}
-
-function openPlateEditor(file) {
-  if (plateMaskState.imageUrl) {
-    URL.revokeObjectURL(plateMaskState.imageUrl);
-  }
-
-  const objectUrl = URL.createObjectURL(file);
-  plateMaskState.imageUrl = objectUrl;
-  plateEditor.hidden = false;
-  platePreviewImage.src = objectUrl;
-}
-
-async function refreshMainPlatePreview() {
-  const cropper = cropperStates.mainImage;
-
-  if (!cropper?.file) {
-    if (plateMaskState.imageUrl) {
-      URL.revokeObjectURL(plateMaskState.imageUrl);
-      plateMaskState.imageUrl = "";
-    }
-    plateEditor.hidden = true;
-    return;
-  }
-
-  const croppedMainFile = await createSquareCroppedFile("mainImage", 1200);
-
-  if (!croppedMainFile) {
-    plateEditor.hidden = true;
-    return;
-  }
-
-  openPlateEditor(croppedMainFile);
-}
-
-function setupCropper(cropperId) {
-  const cropper = cropperStates[cropperId];
-
-  if (!cropper?.input || !cropper.editor || !cropper.stage || !cropper.image || !cropper.zoom) {
-    return;
-  }
-
-  cropper.input.addEventListener("change", () => {
-    const file = cropper.input.files?.[0];
-
-    if (!file) {
-      if (cropper.imageUrl) {
-        URL.revokeObjectURL(cropper.imageUrl);
-        cropper.imageUrl = "";
-      }
-      cropper.file = null;
-      cropper.squareFile = null;
-      cropper.editor.hidden = true;
-
-      if (cropperId === "mainImage") {
-        refreshMainPlatePreview();
-      }
-      return;
-    }
-
-    if (cropper.imageUrl) {
-      URL.revokeObjectURL(cropper.imageUrl);
-    }
-
-    cropper.file = file;
-    cropper.imageUrl = URL.createObjectURL(file);
-    cropper.editor.hidden = false;
-    cropper.zoom.value = "1";
-    cropper.image.src = cropper.imageUrl;
-  });
-
-  cropper.image.addEventListener("load", async () => {
-    cropper.naturalWidth = cropper.image.naturalWidth;
-    cropper.naturalHeight = cropper.image.naturalHeight;
-    fitCropper(cropper);
-
-    if (cropperId === "mainImage") {
-      await refreshMainPlatePreview();
-    }
-  });
-
-  cropper.zoom.addEventListener("input", async () => {
-    if (!cropper.naturalWidth || !cropper.naturalHeight) {
-      return;
-    }
-
-    const stageSize = cropper.stage.clientWidth;
-    const currentCenterX = (stageSize / 2 - cropper.x) / cropper.scale;
-    const currentCenterY = (stageSize / 2 - cropper.y) / cropper.scale;
-    cropper.scale = cropper.baseScale * Number(cropper.zoom.value || 1);
-    cropper.x = stageSize / 2 - currentCenterX * cropper.scale;
-    cropper.y = stageSize / 2 - currentCenterY * cropper.scale;
-    constrainCropperPosition(cropper);
-    renderCropper(cropper);
-
-    if (cropperId === "mainImage") {
-      await refreshMainPlatePreview();
-    }
-  });
-
-  cropper.stage.addEventListener("pointerdown", (event) => {
-    if (!cropper.file) {
-      return;
-    }
-
-    cropper.drag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startImageX: cropper.x,
-      startImageY: cropper.y,
-    };
-    cropper.stage.setPointerCapture(event.pointerId);
-  });
-
-  cropper.stage.addEventListener("pointermove", (event) => {
-    if (!cropper.drag || cropper.drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    cropper.x = cropper.drag.startImageX + (event.clientX - cropper.drag.startX);
-    cropper.y = cropper.drag.startImageY + (event.clientY - cropper.drag.startY);
-    constrainCropperPosition(cropper);
-    renderCropper(cropper);
-  });
-
-  const endDrag = async (event) => {
-    if (!cropper.drag || cropper.drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    cropper.drag = null;
-    cropper.stage.releasePointerCapture(event.pointerId);
-
-    if (cropperId === "mainImage") {
-      await refreshMainPlatePreview();
-    }
+  const update = () => {
+    toggle.checked = Boolean(input.value.trim());
   };
 
-  cropper.stage.addEventListener("pointerup", endDrag);
-  cropper.stage.addEventListener("pointercancel", endDrag);
+  input.addEventListener("input", update);
+  update();
 }
 
-async function createMaskedMainImage(file) {
-  if (!maskPlateCheckbox.checked || !plateMaskState.naturalWidth || !plateMaskState.naturalHeight) {
-    return file;
-  }
+function setupBrandLogoExclusivity() {
+  brandLogoControls.forEach((control) => {
+    const checkbox = document.getElementById(control.controlId);
 
-  if (plateMaskState.points.length !== 4) {
-    throw new Error("請先點選主圖車牌的四個角。");
-  }
+    checkbox.addEventListener("change", () => {
+      if (!checkbox.checked) {
+        return;
+      }
 
-  const stageWidth = platePreviewImage.clientWidth;
-  const stageHeight = platePreviewImage.clientHeight;
-
-  if (!stageWidth || !stageHeight) {
-    return file;
-  }
-
-  const scaleX = plateMaskState.naturalWidth / stageWidth;
-  const scaleY = plateMaskState.naturalHeight / stageHeight;
-  const canvas = document.createElement("canvas");
-  canvas.width = plateMaskState.naturalWidth;
-  canvas.height = plateMaskState.naturalHeight;
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error("無法建立主圖處理畫布。");
-  }
-
-  const imageBitmap = await createImageBitmap(file);
-  context.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#ffffff";
-  context.beginPath();
-  plateMaskState.points.forEach((point, index) => {
-    const scaledX = point.x * stageWidth * scaleX;
-    const scaledY = point.y * stageHeight * scaleY;
-
-    if (index === 0) {
-      context.moveTo(scaledX, scaledY);
-      return;
-    }
-
-    context.lineTo(scaledX, scaledY);
-  });
-  context.closePath();
-  context.fill();
-
-  const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (maskedBlob) => {
-        if (maskedBlob) {
-          resolve(maskedBlob);
+      brandLogoControls.forEach((otherControl) => {
+        if (otherControl.controlId === control.controlId) {
           return;
         }
-        reject(new Error("主圖遮牌失敗。"));
-      },
-      file.type || "image/jpeg",
-      0.95,
-    );
-  });
 
-  return new File([blob], file.name, {
-    type: blob.type || file.type || "image/jpeg",
+        document.getElementById(otherControl.controlId).checked = false;
+      });
+    });
   });
 }
 
-platePreviewImage.addEventListener("load", () => {
-  plateMaskState.naturalWidth = platePreviewImage.naturalWidth;
-  plateMaskState.naturalHeight = platePreviewImage.naturalHeight;
-  plateOverlay.setAttribute("viewBox", `0 0 ${platePreviewImage.clientWidth} ${platePreviewImage.clientHeight}`);
-  clearPlatePoints();
-});
-
-syncCheckboxWithText("item1", "showItem1");
-syncCheckboxWithText("item2", "showItem2");
-syncCheckboxWithText("item3", "showItem3");
-syncCheckboxWithFile("mainImage", "showMainImage");
-syncCheckboxWithFile("secondaryImage1", "showSecondaryImage1");
-syncCheckboxWithFile("secondaryImage2", "showSecondaryImage2");
-setupExclusiveCheckboxes(brandLogoControls.map((control) => control.controlId));
-cropperIds.forEach(setupCropper);
-
-resetPlatePointsButton.addEventListener("click", () => {
-  clearPlatePoints();
-});
-
-plateStage.addEventListener("click", (event) => {
-  if (
-    event.target !== platePreviewImage &&
-    event.target !== plateOverlay &&
-    event.target !== platePolygon &&
-    event.target !== plateStage
-  ) {
-    return;
-  }
-
-  if (plateMaskState.points.length >= 4) {
-    platePointStatus.textContent = "已選滿 4 個角點，如需重選請按「重設四角」。";
-    return;
-  }
-
-  const bounds = platePreviewImage.getBoundingClientRect();
-  if (!bounds.width || !bounds.height) {
-    return;
-  }
-
-  plateMaskState.points.push({
-    x: (event.clientX - bounds.left) / bounds.width,
-    y: (event.clientY - bounds.top) / bounds.height,
-  });
-  renderPlatePoints();
-});
+Object.values(editors).forEach(setupEditorInteractions);
+setupTextToggleSync("item1", "showItem1");
+setupTextToggleSync("item2", "showItem2");
+setupTextToggleSync("item3", "showItem3");
+setupBrandLogoExclusivity();
 
 window.addEventListener("resize", () => {
-  cropperIds.forEach((cropperId) => {
-    const cropper = cropperStates[cropperId];
-    if (cropper?.file) {
-      fitCropper(cropper);
+  Object.values(editors).forEach((editor) => {
+    if (editor.file) {
+      fitEditor(editor);
     }
   });
-
-  if (!plateEditor.hidden) {
-    plateOverlay.setAttribute("viewBox", `0 0 ${platePreviewImage.clientWidth} ${platePreviewImage.clientHeight}`);
-    renderPlatePoints();
-  }
 });
 
 form.addEventListener("submit", async (event) => {
@@ -594,126 +533,80 @@ form.addEventListener("submit", async (event) => {
   resultImage.hidden = true;
   resultLink.hidden = true;
 
-  const formData = new FormData(form);
-
   try {
-    const mainImageFile = formData.get("mainImage");
-    const secondaryImage1 = formData.get("secondaryImage1");
-    const secondaryImage2 = formData.get("secondaryImage2");
-    const itemEntries = [
-      {
-        text: formData.get("item1")?.toString().trim(),
-        show: isChecked(formData, "showItem1"),
-      },
-      {
-        text: formData.get("item2")?.toString().trim(),
-        show: isChecked(formData, "showItem2"),
-      },
-      {
-        text: formData.get("item3")?.toString().trim(),
-        show: isChecked(formData, "showItem3"),
-      },
-    ];
-    const showMainImage = isChecked(formData, "showMainImage");
-    const showSecondaryImage1 = isChecked(formData, "showSecondaryImage1");
-    const showSecondaryImage2 = isChecked(formData, "showSecondaryImage2");
+    const showMainImage = isChecked("showMainImage");
+    const showSecondaryImage1 = isChecked("showSecondaryImage1");
+    const showSecondaryImage2 = isChecked("showSecondaryImage2");
+
+    if (showMainImage && !editors.mainImage.file) {
+      messageNode.textContent = "請先上傳主圖。";
+      return;
+    }
+
+    if (showSecondaryImage1 && !editors.secondaryImage1.file) {
+      messageNode.textContent = "請先上傳副圖 1。";
+      return;
+    }
+
+    if (showSecondaryImage2 && !editors.secondaryImage2.file) {
+      messageNode.textContent = "請先上傳副圖 2。";
+      return;
+    }
+
+    const uploadJobs = [];
+    let uploadedMainImageUrl = "";
+    const uploadedSecondaryImageUrls = ["", ""];
+
+    if (showMainImage) {
+      const renderedMain = await renderSquareFile(editors.mainImage, {
+        applyPlateMask: editors.mainImage.maskToggle.checked,
+      });
+      uploadJobs.push(
+        uploadImageFile("main-images", renderedMain).then((url) => {
+          uploadedMainImageUrl = url;
+        }),
+      );
+    }
+
+    if (showSecondaryImage1) {
+      const renderedSecondary1 = await renderSquareFile(editors.secondaryImage1);
+      uploadJobs.push(
+        uploadImageFile("secondary-images", renderedSecondary1).then((url) => {
+          uploadedSecondaryImageUrls[0] = url;
+        }),
+      );
+    }
+
+    if (showSecondaryImage2) {
+      const renderedSecondary2 = await renderSquareFile(editors.secondaryImage2);
+      uploadJobs.push(
+        uploadImageFile("secondary-images", renderedSecondary2).then((url) => {
+          uploadedSecondaryImageUrls[1] = url;
+        }),
+      );
+    }
+
+    await Promise.all(uploadJobs);
+
     const logoVisibility = Object.fromEntries(
-      productLogoLayerNames.map((name) => [name, isChecked(formData, name)]),
+      productLogoLayerNames.map((name) => [name, isChecked(name)]),
     );
 
     brandLogoControls.forEach((control) => {
-      const visible = isChecked(formData, control.controlId);
+      const visible = isChecked(control.controlId);
       control.layerNames.forEach((layerName) => {
         logoVisibility[layerName] = visible;
       });
     });
 
-    if (
-      showMainImage &&
-      (!(mainImageFile instanceof File) || mainImageFile.size === 0)
-    ) {
-      messageNode.textContent = "請提供 1 張主圖。";
-      return;
-    }
-
-    if (
-      showSecondaryImage1 &&
-      (!(secondaryImage1 instanceof File) || secondaryImage1.size === 0)
-    ) {
-      messageNode.textContent = "請上傳副圖 1。";
-      return;
-    }
-
-    if (
-      showSecondaryImage2 &&
-      (!(secondaryImage2 instanceof File) || secondaryImage2.size === 0)
-    ) {
-      messageNode.textContent = "請上傳副圖 2。";
-      return;
-    }
-
-    let uploadedMainImageUrl = "";
-    const uploadedSecondaryImageUrls = ["", ""];
-
-    if (
-      (showMainImage &&
-        mainImageFile instanceof File &&
-        mainImageFile.size > 0) ||
-      (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) ||
-      (showSecondaryImage2 && secondaryImage2 instanceof File && secondaryImage2.size > 0)
-    ) {
-      try {
-        const uploadJobs = [];
-
-        if (
-          showMainImage &&
-          mainImageFile instanceof File &&
-          mainImageFile.size > 0
-        ) {
-          const croppedMainImage =
-            cropperStates.mainImage.squareFile || (await createSquareCroppedFile("mainImage"));
-          const preparedMainImage = await createMaskedMainImage(croppedMainImage || mainImageFile);
-          uploadJobs.push(
-            uploadImageFile("main-images", preparedMainImage).then((url) => {
-              uploadedMainImageUrl = url;
-            }),
-          );
-        }
-
-        if (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) {
-          const croppedSecondaryImage1 =
-            cropperStates.secondaryImage1.squareFile ||
-            (await createSquareCroppedFile("secondaryImage1"));
-          uploadJobs.push(
-            uploadImageFile("secondary-images", croppedSecondaryImage1 || secondaryImage1).then((url) => {
-              uploadedSecondaryImageUrls[0] = url;
-            }),
-          );
-        }
-
-        if (showSecondaryImage2 && secondaryImage2 instanceof File && secondaryImage2.size > 0) {
-          const croppedSecondaryImage2 =
-            cropperStates.secondaryImage2.squareFile ||
-            (await createSquareCroppedFile("secondaryImage2"));
-          uploadJobs.push(
-            uploadImageFile("secondary-images", croppedSecondaryImage2 || secondaryImage2).then((url) => {
-              uploadedSecondaryImageUrls[1] = url;
-            }),
-          );
-        }
-
-        await Promise.all(uploadJobs);
-      } catch (error) {
-        messageNode.textContent =
-          error instanceof Error ? error.message : "圖片上傳失敗。";
-        return;
-      }
-    }
-
     const payload = {
-      title: formData.get("title")?.toString().trim(),
-      subtitle: formData.get("subtitle")?.toString().trim(),
-      itemEntries,
+      title: document.getElementById("title").value.trim(),
+      subtitle: document.getElementById("subtitle").value.trim(),
+      itemEntries: [
+        { text: document.getElementById("item1").value.trim(), show: isChecked("showItem1") },
+        { text: document.getElementById("item2").value.trim(), show: isChecked("showItem2") },
+        { text: document.getElementById("item3").value.trim(), show: isChecked("showItem3") },
+      ],
       mainImage: {
         show: showMainImage,
         imageUrl: showMainImage ? uploadedMainImageUrl : "",
