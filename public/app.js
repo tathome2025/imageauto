@@ -10,8 +10,10 @@ const mainImageInput = document.getElementById("mainImage");
 const plateEditor = document.getElementById("plate-editor");
 const plateStage = document.getElementById("plate-stage");
 const platePreviewImage = document.getElementById("plate-preview-image");
-const plateBox = document.getElementById("plate-box");
-const resetPlateBoxButton = document.getElementById("reset-plate-box");
+const plateOverlay = document.getElementById("plate-overlay");
+const platePolygon = document.getElementById("plate-polygon");
+const platePointStatus = document.getElementById("plate-point-status");
+const resetPlatePointsButton = document.getElementById("reset-plate-points");
 const maskPlateCheckbox = document.getElementById("maskPlate");
 const multipartThreshold = 4.5 * 1024 * 1024;
 const logoLayerNames = [
@@ -42,8 +44,7 @@ const plateMaskState = {
   imageUrl: "",
   naturalWidth: 0,
   naturalHeight: 0,
-  box: { x: 0, y: 0, width: 0, height: 0 },
-  interaction: null,
+  points: [],
 };
 
 async function readApiResponse(response) {
@@ -81,10 +82,6 @@ function sanitizeFilename(filename) {
   return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
 function isChecked(formData, name) {
   return formData.get(name) === "on";
 }
@@ -100,30 +97,41 @@ async function uploadImageFile(prefix, file) {
   return blob.url;
 }
 
-function updatePlateBox() {
-  plateBox.style.left = `${plateMaskState.box.x}px`;
-  plateBox.style.top = `${plateMaskState.box.y}px`;
-  plateBox.style.width = `${plateMaskState.box.width}px`;
-  plateBox.style.height = `${plateMaskState.box.height}px`;
+function clearPlatePoints() {
+  plateMaskState.points = [];
+  plateStage.querySelectorAll(".plate-point").forEach((node) => node.remove());
+  platePolygon.setAttribute("points", "");
+  platePointStatus.textContent = "尚未選取角點";
 }
 
-function resetPlateBox() {
-  const stageWidth = platePreviewImage.clientWidth || plateStage.clientWidth || 0;
-  const stageHeight = platePreviewImage.clientHeight || plateStage.clientHeight || 0;
+function renderPlatePoints() {
+  const stageWidth = platePreviewImage.clientWidth;
+  const stageHeight = platePreviewImage.clientHeight;
 
-  if (!stageWidth || !stageHeight) {
+  plateStage.querySelectorAll(".plate-point").forEach((node) => node.remove());
+
+  plateMaskState.points.forEach((point, index) => {
+    const marker = document.createElement("div");
+    marker.className = "plate-point";
+    marker.style.left = `${point.x * stageWidth}px`;
+    marker.style.top = `${point.y * stageHeight}px`;
+    marker.title = `角點 ${index + 1}`;
+    plateStage.append(marker);
+  });
+
+  if (plateMaskState.points.length === 4) {
+    platePolygon.setAttribute(
+      "points",
+      plateMaskState.points
+        .map((point) => `${point.x * stageWidth},${point.y * stageHeight}`)
+        .join(" "),
+    );
+    platePointStatus.textContent = "已選取 4 個角點";
     return;
   }
 
-  const width = Math.max(80, stageWidth * 0.28);
-  const height = Math.max(28, stageHeight * 0.1);
-  plateMaskState.box = {
-    width,
-    height,
-    x: (stageWidth - width) / 2,
-    y: stageHeight * 0.72,
-  };
-  updatePlateBox();
+  platePolygon.setAttribute("points", "");
+  platePointStatus.textContent = `已選取 ${plateMaskState.points.length} / 4 個角點`;
 }
 
 function openPlateEditor(file) {
@@ -140,6 +148,10 @@ function openPlateEditor(file) {
 async function createMaskedMainImage(file) {
   if (!maskPlateCheckbox.checked || !plateMaskState.naturalWidth || !plateMaskState.naturalHeight) {
     return file;
+  }
+
+  if (plateMaskState.points.length !== 4) {
+    throw new Error("請先點選主圖車牌的四個角。");
   }
 
   const stageWidth = platePreviewImage.clientWidth;
@@ -163,12 +175,20 @@ async function createMaskedMainImage(file) {
   const imageBitmap = await createImageBitmap(file);
   context.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
   context.fillStyle = "#ffffff";
-  context.fillRect(
-    Math.round(plateMaskState.box.x * scaleX),
-    Math.round(plateMaskState.box.y * scaleY),
-    Math.round(plateMaskState.box.width * scaleX),
-    Math.round(plateMaskState.box.height * scaleY),
-  );
+  context.beginPath();
+  plateMaskState.points.forEach((point, index) => {
+    const scaledX = point.x * stageWidth * scaleX;
+    const scaledY = point.y * stageHeight * scaleY;
+
+    if (index === 0) {
+      context.moveTo(scaledX, scaledY);
+      return;
+    }
+
+    context.lineTo(scaledX, scaledY);
+  });
+  context.closePath();
+  context.fill();
 
   const blob = await new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -192,7 +212,8 @@ async function createMaskedMainImage(file) {
 platePreviewImage.addEventListener("load", () => {
   plateMaskState.naturalWidth = platePreviewImage.naturalWidth;
   plateMaskState.naturalHeight = platePreviewImage.naturalHeight;
-  resetPlateBox();
+  plateOverlay.setAttribute("viewBox", `0 0 ${platePreviewImage.clientWidth} ${platePreviewImage.clientHeight}`);
+  clearPlatePoints();
 });
 
 mainImageInput.addEventListener("change", () => {
@@ -210,63 +231,41 @@ mainImageInput.addEventListener("change", () => {
   openPlateEditor(file);
 });
 
-resetPlateBoxButton.addEventListener("click", () => {
-  resetPlateBox();
+resetPlatePointsButton.addEventListener("click", () => {
+  clearPlatePoints();
 });
 
-plateBox.addEventListener("pointerdown", (event) => {
-  const target = event.target;
-  const mode =
-    target instanceof HTMLElement && target.classList.contains("plate-box__handle")
-      ? "resize"
-      : "move";
-  plateMaskState.interaction = {
-    mode,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    startBox: { ...plateMaskState.box },
-  };
-  plateBox.setPointerCapture(event.pointerId);
-});
-
-plateBox.addEventListener("pointermove", (event) => {
-  if (!plateMaskState.interaction || plateMaskState.interaction.pointerId !== event.pointerId) {
+plateStage.addEventListener("click", (event) => {
+  if (
+    event.target !== platePreviewImage &&
+    event.target !== plateOverlay &&
+    event.target !== platePolygon &&
+    event.target !== plateStage
+  ) {
     return;
   }
 
-  const stageWidth = platePreviewImage.clientWidth;
-  const stageHeight = platePreviewImage.clientHeight;
-  const deltaX = event.clientX - plateMaskState.interaction.startX;
-  const deltaY = event.clientY - plateMaskState.interaction.startY;
-  const nextBox = { ...plateMaskState.interaction.startBox };
-
-  if (plateMaskState.interaction.mode === "move") {
-    nextBox.x = clamp(nextBox.x + deltaX, 0, stageWidth - nextBox.width);
-    nextBox.y = clamp(nextBox.y + deltaY, 0, stageHeight - nextBox.height);
-  } else {
-    nextBox.width = clamp(nextBox.width + deltaX, 56, stageWidth - nextBox.x);
-    nextBox.height = clamp(nextBox.height + deltaY, 24, stageHeight - nextBox.y);
-  }
-
-  plateMaskState.box = nextBox;
-  updatePlateBox();
-});
-
-function endPlateInteraction(event) {
-  if (!plateMaskState.interaction || plateMaskState.interaction.pointerId !== event.pointerId) {
+  if (plateMaskState.points.length >= 4) {
+    platePointStatus.textContent = "已選滿 4 個角點，如需重選請按「重設四角」。";
     return;
   }
 
-  plateMaskState.interaction = null;
-  plateBox.releasePointerCapture(event.pointerId);
-}
+  const bounds = platePreviewImage.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) {
+    return;
+  }
 
-plateBox.addEventListener("pointerup", endPlateInteraction);
-plateBox.addEventListener("pointercancel", endPlateInteraction);
+  plateMaskState.points.push({
+    x: (event.clientX - bounds.left) / bounds.width,
+    y: (event.clientY - bounds.top) / bounds.height,
+  });
+  renderPlatePoints();
+});
+
 window.addEventListener("resize", () => {
   if (!plateEditor.hidden) {
-    resetPlateBox();
+    plateOverlay.setAttribute("viewBox", `0 0 ${platePreviewImage.clientWidth} ${platePreviewImage.clientHeight}`);
+    renderPlatePoints();
   }
 });
 

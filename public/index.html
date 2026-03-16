@@ -74,16 +74,17 @@
           <div id="plate-editor" class="plate-editor" hidden>
             <div class="plate-editor__header">
               <strong>車牌遮罩</strong>
-              <button id="reset-plate-box" class="ghost-button" type="button">重設白框</button>
+              <button id="reset-plate-points" class="ghost-button" type="button">重設四角</button>
             </div>
             <p class="helper">
-              拖動白框到車牌位置，右下角可調整大小。送出時會先把這個白框套用到主圖。
+              請依序點選車牌四個角。送出時會把四角圍成的區域直接填白。
             </p>
+            <div id="plate-point-status" class="plate-point-status">尚未選取角點</div>
             <div id="plate-stage" class="plate-stage">
               <img id="plate-preview-image" alt="Main image plate masking preview" />
-              <div id="plate-box" class="plate-box">
-                <div class="plate-box__handle" aria-hidden="true"></div>
-              </div>
+              <svg id="plate-overlay" class="plate-overlay" aria-hidden="true">
+                <polygon id="plate-polygon" class="plate-polygon"></polygon>
+              </svg>
             </div>
           </div>
 
