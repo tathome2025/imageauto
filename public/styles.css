@@ -153,6 +153,49 @@ label {
   color: var(--text);
 }
 
+.crop-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(12, 24, 41, 0.56);
+}
+
+.crop-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.crop-stage {
+  position: relative;
+  width: min(100%, 260px);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(3, 11, 19, 0.86);
+  cursor: grab;
+}
+
+.crop-stage img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform-origin: top left;
+  touch-action: none;
+}
+
+.crop-zoom {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
 .plate-editor {
   display: grid;
   gap: 10px;

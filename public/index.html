@@ -63,6 +63,19 @@
             主圖
             <input id="mainImage" name="mainImage" type="file" accept="image/*" />
           </label>
+          <div id="crop-editor-mainImage" class="crop-editor span-full" hidden>
+            <div class="crop-editor__header">
+              <strong>主圖裁剪</strong>
+            </div>
+            <p class="helper">拖拉圖片位置，並用縮放調整正方裁切範圍。</p>
+            <div id="crop-stage-mainImage" class="crop-stage">
+              <img id="crop-image-mainImage" alt="Main image square crop preview" />
+            </div>
+            <label class="crop-zoom span-full">
+              縮放
+              <input id="crop-zoom-mainImage" type="range" min="1" max="3" step="0.01" value="1" />
+            </label>
+          </div>
           <label class="toggle">
             <input id="showMainImage" name="showMainImage" type="checkbox" />
             顯示 car_image
@@ -92,6 +105,19 @@
             副圖 1
             <input id="secondaryImage1" name="secondaryImage1" type="file" accept="image/*" />
           </label>
+          <div id="crop-editor-secondaryImage1" class="crop-editor span-full" hidden>
+            <div class="crop-editor__header">
+              <strong>副圖 1 裁剪</strong>
+            </div>
+            <p class="helper">拖拉圖片位置，並用縮放調整正方裁切範圍。</p>
+            <div id="crop-stage-secondaryImage1" class="crop-stage">
+              <img id="crop-image-secondaryImage1" alt="Secondary image 1 square crop preview" />
+            </div>
+            <label class="crop-zoom span-full">
+              縮放
+              <input id="crop-zoom-secondaryImage1" type="range" min="1" max="3" step="0.01" value="1" />
+            </label>
+          </div>
           <label class="toggle">
             <input id="showSecondaryImage1" name="showSecondaryImage1" type="checkbox" />
             顯示 product1
@@ -101,6 +127,19 @@
             副圖 2
             <input id="secondaryImage2" name="secondaryImage2" type="file" accept="image/*" />
           </label>
+          <div id="crop-editor-secondaryImage2" class="crop-editor span-full" hidden>
+            <div class="crop-editor__header">
+              <strong>副圖 2 裁剪</strong>
+            </div>
+            <p class="helper">拖拉圖片位置，並用縮放調整正方裁切範圍。</p>
+            <div id="crop-stage-secondaryImage2" class="crop-stage">
+              <img id="crop-image-secondaryImage2" alt="Secondary image 2 square crop preview" />
+            </div>
+            <label class="crop-zoom span-full">
+              縮放
+              <input id="crop-zoom-secondaryImage2" type="range" min="1" max="3" step="0.01" value="1" />
+            </label>
+          </div>
           <label class="toggle">
             <input id="showSecondaryImage2" name="showSecondaryImage2" type="checkbox" />
             顯示 product2

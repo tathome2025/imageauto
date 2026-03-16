@@ -16,6 +16,7 @@ const platePointStatus = document.getElementById("plate-point-status");
 const resetPlatePointsButton = document.getElementById("reset-plate-points");
 const maskPlateCheckbox = document.getElementById("maskPlate");
 const multipartThreshold = 4.5 * 1024 * 1024;
+const cropperIds = ["mainImage", "secondaryImage1", "secondaryImage2"];
 const brandLogoLayerNames = [
   "brand_benz",
   "brand_bmw",
@@ -52,6 +53,28 @@ const plateMaskState = {
   naturalHeight: 0,
   points: [],
 };
+const cropperStates = Object.fromEntries(
+  cropperIds.map((id) => [
+    id,
+    {
+      id,
+      input: document.getElementById(id),
+      editor: document.getElementById(`crop-editor-${id}`),
+      stage: document.getElementById(`crop-stage-${id}`),
+      image: document.getElementById(`crop-image-${id}`),
+      zoom: document.getElementById(`crop-zoom-${id}`),
+      file: null,
+      imageUrl: "",
+      naturalWidth: 0,
+      naturalHeight: 0,
+      scale: 1,
+      baseScale: 1,
+      x: 0,
+      y: 0,
+      drag: null,
+    },
+  ]),
+);
 
 async function readApiResponse(response) {
   const raw = await response.text();
@@ -90,6 +113,10 @@ function sanitizeFilename(filename) {
 
 function isChecked(formData, name) {
   return formData.get(name) === "on";
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function syncCheckboxWithText(inputId, checkboxId) {
@@ -179,6 +206,95 @@ async function uploadImageFile(prefix, file) {
   return blob.url;
 }
 
+function constrainCropperPosition(cropper) {
+  const stageSize = cropper.stage.clientWidth;
+  const imageWidth = cropper.naturalWidth * cropper.scale;
+  const imageHeight = cropper.naturalHeight * cropper.scale;
+  const minX = Math.min(0, stageSize - imageWidth);
+  const minY = Math.min(0, stageSize - imageHeight);
+
+  cropper.x = clamp(cropper.x, minX, 0);
+  cropper.y = clamp(cropper.y, minY, 0);
+}
+
+function renderCropper(cropper) {
+  if (!cropper.image) {
+    return;
+  }
+
+  cropper.image.style.width = `${cropper.naturalWidth * cropper.scale}px`;
+  cropper.image.style.height = `${cropper.naturalHeight * cropper.scale}px`;
+  cropper.image.style.transform = `translate(${cropper.x}px, ${cropper.y}px)`;
+}
+
+function fitCropper(cropper) {
+  const stageSize = cropper.stage.clientWidth;
+
+  if (!stageSize || !cropper.naturalWidth || !cropper.naturalHeight) {
+    return;
+  }
+
+  cropper.baseScale = Math.max(stageSize / cropper.naturalWidth, stageSize / cropper.naturalHeight);
+  cropper.scale = cropper.baseScale * Number(cropper.zoom.value || 1);
+  cropper.x = (stageSize - cropper.naturalWidth * cropper.scale) / 2;
+  cropper.y = (stageSize - cropper.naturalHeight * cropper.scale) / 2;
+  constrainCropperPosition(cropper);
+  renderCropper(cropper);
+}
+
+async function blobToFile(blob, filename, type) {
+  return new File([blob], filename, { type });
+}
+
+async function createSquareCroppedFile(cropperId, outputSize = 1200) {
+  const cropper = cropperStates[cropperId];
+
+  if (!cropper?.file) {
+    return null;
+  }
+
+  const stageSize = cropper.stage.clientWidth;
+
+  if (!stageSize) {
+    return cropper.file;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("無法建立圖片裁剪畫布。");
+  }
+
+  const imageBitmap = await createImageBitmap(cropper.file);
+  const factor = outputSize / stageSize;
+  context.drawImage(
+    imageBitmap,
+    cropper.x * factor,
+    cropper.y * factor,
+    cropper.naturalWidth * cropper.scale * factor,
+    cropper.naturalHeight * cropper.scale * factor,
+  );
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (croppedBlob) => {
+        if (croppedBlob) {
+          resolve(croppedBlob);
+          return;
+        }
+        reject(new Error("圖片裁剪失敗。"));
+      },
+      cropper.file.type || "image/jpeg",
+      0.95,
+    );
+  });
+
+  return blobToFile(blob, cropper.file.name, blob.type || cropper.file.type || "image/jpeg");
+}
+
 function clearPlatePoints() {
   plateMaskState.points = [];
   plateStage.querySelectorAll(".plate-point").forEach((node) => node.remove());
@@ -225,6 +341,135 @@ function openPlateEditor(file) {
   plateMaskState.imageUrl = objectUrl;
   plateEditor.hidden = false;
   platePreviewImage.src = objectUrl;
+}
+
+async function refreshMainPlatePreview() {
+  const cropper = cropperStates.mainImage;
+
+  if (!cropper?.file) {
+    if (plateMaskState.imageUrl) {
+      URL.revokeObjectURL(plateMaskState.imageUrl);
+      plateMaskState.imageUrl = "";
+    }
+    plateEditor.hidden = true;
+    return;
+  }
+
+  const croppedMainFile = await createSquareCroppedFile("mainImage", 960);
+
+  if (!croppedMainFile) {
+    plateEditor.hidden = true;
+    return;
+  }
+
+  openPlateEditor(croppedMainFile);
+}
+
+function setupCropper(cropperId) {
+  const cropper = cropperStates[cropperId];
+
+  if (!cropper?.input || !cropper.editor || !cropper.stage || !cropper.image || !cropper.zoom) {
+    return;
+  }
+
+  cropper.input.addEventListener("change", () => {
+    const file = cropper.input.files?.[0];
+
+    if (!file) {
+      if (cropper.imageUrl) {
+        URL.revokeObjectURL(cropper.imageUrl);
+        cropper.imageUrl = "";
+      }
+      cropper.file = null;
+      cropper.editor.hidden = true;
+
+      if (cropperId === "mainImage") {
+        refreshMainPlatePreview();
+      }
+      return;
+    }
+
+    if (cropper.imageUrl) {
+      URL.revokeObjectURL(cropper.imageUrl);
+    }
+
+    cropper.file = file;
+    cropper.imageUrl = URL.createObjectURL(file);
+    cropper.editor.hidden = false;
+    cropper.zoom.value = "1";
+    cropper.image.src = cropper.imageUrl;
+  });
+
+  cropper.image.addEventListener("load", async () => {
+    cropper.naturalWidth = cropper.image.naturalWidth;
+    cropper.naturalHeight = cropper.image.naturalHeight;
+    fitCropper(cropper);
+
+    if (cropperId === "mainImage") {
+      await refreshMainPlatePreview();
+    }
+  });
+
+  cropper.zoom.addEventListener("input", async () => {
+    if (!cropper.naturalWidth || !cropper.naturalHeight) {
+      return;
+    }
+
+    const stageSize = cropper.stage.clientWidth;
+    const currentCenterX = (stageSize / 2 - cropper.x) / cropper.scale;
+    const currentCenterY = (stageSize / 2 - cropper.y) / cropper.scale;
+    cropper.scale = cropper.baseScale * Number(cropper.zoom.value || 1);
+    cropper.x = stageSize / 2 - currentCenterX * cropper.scale;
+    cropper.y = stageSize / 2 - currentCenterY * cropper.scale;
+    constrainCropperPosition(cropper);
+    renderCropper(cropper);
+
+    if (cropperId === "mainImage") {
+      await refreshMainPlatePreview();
+    }
+  });
+
+  cropper.stage.addEventListener("pointerdown", (event) => {
+    if (!cropper.file) {
+      return;
+    }
+
+    cropper.drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startImageX: cropper.x,
+      startImageY: cropper.y,
+    };
+    cropper.stage.setPointerCapture(event.pointerId);
+  });
+
+  cropper.stage.addEventListener("pointermove", (event) => {
+    if (!cropper.drag || cropper.drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    cropper.x = cropper.drag.startImageX + (event.clientX - cropper.drag.startX);
+    cropper.y = cropper.drag.startImageY + (event.clientY - cropper.drag.startY);
+    constrainCropperPosition(cropper);
+    renderCropper(cropper);
+  });
+
+  const endDrag = async (event) => {
+    if (!cropper.drag || cropper.drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    cropper.drag = null;
+    cropper.stage.releasePointerCapture(event.pointerId);
+
+    if (cropperId === "mainImage") {
+      await refreshMainPlatePreview();
+    }
+  };
+
+  cropper.stage.addEventListener("pointerup", endDrag);
+  cropper.stage.addEventListener("pointercancel", endDrag);
 }
 
 async function createMaskedMainImage(file) {
@@ -305,21 +550,7 @@ syncMainImageCheckbox();
 syncCheckboxWithFile("secondaryImage1", "showSecondaryImage1");
 syncCheckboxWithFile("secondaryImage2", "showSecondaryImage2");
 setupExclusiveCheckboxes(brandLogoLayerNames);
-
-mainImageInput.addEventListener("change", () => {
-  const file = mainImageInput.files?.[0];
-
-  if (!file) {
-    if (plateMaskState.imageUrl) {
-      URL.revokeObjectURL(plateMaskState.imageUrl);
-      plateMaskState.imageUrl = "";
-    }
-    plateEditor.hidden = true;
-    return;
-  }
-
-  openPlateEditor(file);
-});
+cropperIds.forEach(setupCropper);
 
 resetPlatePointsButton.addEventListener("click", () => {
   clearPlatePoints();
@@ -353,6 +584,13 @@ plateStage.addEventListener("click", (event) => {
 });
 
 window.addEventListener("resize", () => {
+  cropperIds.forEach((cropperId) => {
+    const cropper = cropperStates[cropperId];
+    if (cropper?.file) {
+      fitCropper(cropper);
+    }
+  });
+
   if (!plateEditor.hidden) {
     plateOverlay.setAttribute("viewBox", `0 0 ${platePreviewImage.clientWidth} ${platePreviewImage.clientHeight}`);
     renderPlatePoints();
@@ -439,7 +677,8 @@ form.addEventListener("submit", async (event) => {
           mainImageFile instanceof File &&
           mainImageFile.size > 0
         ) {
-          const preparedMainImage = await createMaskedMainImage(mainImageFile);
+          const croppedMainImage = await createSquareCroppedFile("mainImage");
+          const preparedMainImage = await createMaskedMainImage(croppedMainImage || mainImageFile);
           uploadJobs.push(
             uploadImageFile("main-images", preparedMainImage).then((url) => {
               uploadedMainImageUrl = url;
@@ -448,16 +687,18 @@ form.addEventListener("submit", async (event) => {
         }
 
         if (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) {
+          const croppedSecondaryImage1 = await createSquareCroppedFile("secondaryImage1");
           uploadJobs.push(
-            uploadImageFile("secondary-images", secondaryImage1).then((url) => {
+            uploadImageFile("secondary-images", croppedSecondaryImage1 || secondaryImage1).then((url) => {
               uploadedSecondaryImageUrls[0] = url;
             }),
           );
         }
 
         if (showSecondaryImage2 && secondaryImage2 instanceof File && secondaryImage2.size > 0) {
+          const croppedSecondaryImage2 = await createSquareCroppedFile("secondaryImage2");
           uploadJobs.push(
-            uploadImageFile("secondary-images", secondaryImage2).then((url) => {
+            uploadImageFile("secondary-images", croppedSecondaryImage2 || secondaryImage2).then((url) => {
               uploadedSecondaryImageUrls[1] = url;
             }),
           );
