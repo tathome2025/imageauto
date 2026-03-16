@@ -7,6 +7,30 @@ const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
 const multipartThreshold = 4.5 * 1024 * 1024;
+const logoLayerNames = [
+  "product_res",
+  "product_ur",
+  "product_army",
+  "product_NGK",
+  "product_endless",
+  "product_bmc",
+  "product_eibach",
+  "brand_benz",
+  "brand_bmw",
+  "brand_honda",
+  "brand_kia",
+  "brand_mini",
+  "brand_lexus",
+  "brand_mazda",
+  "brand_porsche",
+  "brand_subaru",
+  "brand_tesla",
+  "brand_toyota",
+  "brand_volvo",
+  "brand_vw",
+  "brand_byd",
+  "bradn_audi",
+];
 
 async function readApiResponse(response) {
   const raw = await response.text();
@@ -89,6 +113,9 @@ form.addEventListener("submit", async (event) => {
     const showMainImage = isChecked(formData, "showMainImage");
     const showSecondaryImage1 = isChecked(formData, "showSecondaryImage1");
     const showSecondaryImage2 = isChecked(formData, "showSecondaryImage2");
+    const logoVisibility = Object.fromEntries(
+      logoLayerNames.map((name) => [name, isChecked(formData, name)]),
+    );
 
     if (
       showMainImage &&
@@ -176,6 +203,7 @@ form.addEventListener("submit", async (event) => {
       },
       secondaryImageUrls: uploadedSecondaryImageUrls,
       secondaryImageVisibility: [showSecondaryImage1, showSecondaryImage2],
+      logoVisibility,
     };
 
     const response = await fetch("/api/render", {
