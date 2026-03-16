@@ -17,22 +17,22 @@ const resetPlatePointsButton = document.getElementById("reset-plate-points");
 const maskPlateCheckbox = document.getElementById("maskPlate");
 const multipartThreshold = 4.5 * 1024 * 1024;
 const cropperIds = ["mainImage", "secondaryImage1", "secondaryImage2"];
-const brandLogoLayerNames = [
-  "brand_benz",
-  "brand_bmw",
-  "brand_honda",
-  "brand_kia",
-  "brand_mini",
-  "brand_lexus",
-  "brand_mazda",
-  "brand_porsche",
-  "brand_subaru",
-  "brand_tesla",
-  "brand_toyota",
-  "brand_volvo",
-  "brand_vw",
-  "brand_byd",
-  "bradn_audi",
+const brandLogoControls = [
+  { controlId: "brand_benz", layerNames: ["brand_benz"] },
+  { controlId: "brand_bmw", layerNames: ["brand_bmw"] },
+  { controlId: "brand_honda", layerNames: ["brand_honda"] },
+  { controlId: "brand_kia", layerNames: ["brand_kia"] },
+  { controlId: "brand_mini", layerNames: ["brand_mini"] },
+  { controlId: "brand_lexus", layerNames: ["brand_lexus"] },
+  { controlId: "brand_mazda", layerNames: ["brand_mazda"] },
+  { controlId: "brand_porsche", layerNames: ["brand_porsche"] },
+  { controlId: "brand_subaru", layerNames: ["brand_subaru"] },
+  { controlId: "brand_tesla", layerNames: ["brand_tesla"] },
+  { controlId: "brand_toyota", layerNames: ["brand_toyota"] },
+  { controlId: "brand_volvo", layerNames: ["brand_volvo"] },
+  { controlId: "brand_vw", layerNames: ["brand_vw"] },
+  { controlId: "brand_byd", layerNames: ["brand_byd"] },
+  { controlId: "brand_audi", layerNames: ["brand_audi", "bradn_audi"] },
 ];
 const productLogoLayerNames = [
   "product_res",
@@ -45,7 +45,7 @@ const productLogoLayerNames = [
 ];
 const logoLayerNames = [
   ...productLogoLayerNames,
-  ...brandLogoLayerNames,
+  ...brandLogoControls.flatMap((control) => control.layerNames),
 ];
 const plateMaskState = {
   imageUrl: "",
@@ -549,7 +549,7 @@ syncCheckboxWithText("item3", "showItem3");
 syncMainImageCheckbox();
 syncCheckboxWithFile("secondaryImage1", "showSecondaryImage1");
 syncCheckboxWithFile("secondaryImage2", "showSecondaryImage2");
-setupExclusiveCheckboxes(brandLogoLayerNames);
+setupExclusiveCheckboxes(brandLogoControls.map((control) => control.controlId));
 cropperIds.forEach(setupCropper);
 
 resetPlatePointsButton.addEventListener("click", () => {
@@ -629,8 +629,15 @@ form.addEventListener("submit", async (event) => {
     const showSecondaryImage1 = isChecked(formData, "showSecondaryImage1");
     const showSecondaryImage2 = isChecked(formData, "showSecondaryImage2");
     const logoVisibility = Object.fromEntries(
-      logoLayerNames.map((name) => [name, isChecked(formData, name)]),
+      productLogoLayerNames.map((name) => [name, isChecked(formData, name)]),
     );
+
+    brandLogoControls.forEach((control) => {
+      const visible = isChecked(formData, control.controlId);
+      control.layerNames.forEach((layerName) => {
+        logoVisibility[layerName] = visible;
+      });
+    });
 
     if (
       showMainImage &&
