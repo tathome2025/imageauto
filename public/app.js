@@ -72,6 +72,7 @@ const cropperStates = Object.fromEntries(
       x: 0,
       y: 0,
       drag: null,
+      squareFile: null,
     },
   ]),
 );
@@ -148,24 +149,6 @@ function syncCheckboxWithFile(inputId, checkboxId) {
   };
 
   input.addEventListener("change", update);
-  update();
-}
-
-function syncMainImageCheckbox() {
-  const fileInput = document.getElementById("mainImage");
-  const urlInput = document.getElementById("mainImageUrl");
-  const checkbox = document.getElementById("showMainImage");
-
-  if (!fileInput || !urlInput || !checkbox) {
-    return;
-  }
-
-  const update = () => {
-    checkbox.checked = Boolean(fileInput.files?.length || urlInput.value.trim());
-  };
-
-  fileInput.addEventListener("change", update);
-  urlInput.addEventListener("input", update);
   update();
 }
 
@@ -292,7 +275,13 @@ async function createSquareCroppedFile(cropperId, outputSize = 1200) {
     );
   });
 
-  return blobToFile(blob, cropper.file.name, blob.type || cropper.file.type || "image/jpeg");
+  const squareFile = await blobToFile(
+    blob,
+    cropper.file.name,
+    blob.type || cropper.file.type || "image/jpeg",
+  );
+  cropper.squareFile = squareFile;
+  return squareFile;
 }
 
 function clearPlatePoints() {
@@ -355,7 +344,7 @@ async function refreshMainPlatePreview() {
     return;
   }
 
-  const croppedMainFile = await createSquareCroppedFile("mainImage", 960);
+  const croppedMainFile = await createSquareCroppedFile("mainImage", 1200);
 
   if (!croppedMainFile) {
     plateEditor.hidden = true;
@@ -381,6 +370,7 @@ function setupCropper(cropperId) {
         cropper.imageUrl = "";
       }
       cropper.file = null;
+      cropper.squareFile = null;
       cropper.editor.hidden = true;
 
       if (cropperId === "mainImage") {
@@ -546,7 +536,7 @@ platePreviewImage.addEventListener("load", () => {
 syncCheckboxWithText("item1", "showItem1");
 syncCheckboxWithText("item2", "showItem2");
 syncCheckboxWithText("item3", "showItem3");
-syncMainImageCheckbox();
+syncCheckboxWithFile("mainImage", "showMainImage");
 syncCheckboxWithFile("secondaryImage1", "showSecondaryImage1");
 syncCheckboxWithFile("secondaryImage2", "showSecondaryImage2");
 setupExclusiveCheckboxes(brandLogoControls.map((control) => control.controlId));
@@ -610,7 +600,6 @@ form.addEventListener("submit", async (event) => {
     const mainImageFile = formData.get("mainImage");
     const secondaryImage1 = formData.get("secondaryImage1");
     const secondaryImage2 = formData.get("secondaryImage2");
-    const manualMainImageUrl = formData.get("mainImageUrl")?.toString().trim();
     const itemEntries = [
       {
         text: formData.get("item1")?.toString().trim(),
@@ -641,7 +630,6 @@ form.addEventListener("submit", async (event) => {
 
     if (
       showMainImage &&
-      !manualMainImageUrl &&
       (!(mainImageFile instanceof File) || mainImageFile.size === 0)
     ) {
       messageNode.textContent = "請提供 1 張主圖。";
@@ -664,12 +652,11 @@ form.addEventListener("submit", async (event) => {
       return;
     }
 
-    let uploadedMainImageUrl = manualMainImageUrl;
+    let uploadedMainImageUrl = "";
     const uploadedSecondaryImageUrls = ["", ""];
 
     if (
       (showMainImage &&
-        !manualMainImageUrl &&
         mainImageFile instanceof File &&
         mainImageFile.size > 0) ||
       (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) ||
@@ -680,11 +667,11 @@ form.addEventListener("submit", async (event) => {
 
         if (
           showMainImage &&
-          !manualMainImageUrl &&
           mainImageFile instanceof File &&
           mainImageFile.size > 0
         ) {
-          const croppedMainImage = await createSquareCroppedFile("mainImage");
+          const croppedMainImage =
+            cropperStates.mainImage.squareFile || (await createSquareCroppedFile("mainImage"));
           const preparedMainImage = await createMaskedMainImage(croppedMainImage || mainImageFile);
           uploadJobs.push(
             uploadImageFile("main-images", preparedMainImage).then((url) => {
@@ -694,7 +681,9 @@ form.addEventListener("submit", async (event) => {
         }
 
         if (showSecondaryImage1 && secondaryImage1 instanceof File && secondaryImage1.size > 0) {
-          const croppedSecondaryImage1 = await createSquareCroppedFile("secondaryImage1");
+          const croppedSecondaryImage1 =
+            cropperStates.secondaryImage1.squareFile ||
+            (await createSquareCroppedFile("secondaryImage1"));
           uploadJobs.push(
             uploadImageFile("secondary-images", croppedSecondaryImage1 || secondaryImage1).then((url) => {
               uploadedSecondaryImageUrls[0] = url;
@@ -703,7 +692,9 @@ form.addEventListener("submit", async (event) => {
         }
 
         if (showSecondaryImage2 && secondaryImage2 instanceof File && secondaryImage2.size > 0) {
-          const croppedSecondaryImage2 = await createSquareCroppedFile("secondaryImage2");
+          const croppedSecondaryImage2 =
+            cropperStates.secondaryImage2.squareFile ||
+            (await createSquareCroppedFile("secondaryImage2"));
           uploadJobs.push(
             uploadImageFile("secondary-images", croppedSecondaryImage2 || secondaryImage2).then((url) => {
               uploadedSecondaryImageUrls[1] = url;
