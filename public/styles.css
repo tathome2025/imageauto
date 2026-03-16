@@ -144,8 +144,8 @@ label {
 
 .control-group {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 10px 14px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -158,6 +158,13 @@ label {
   margin: 0 0 2px;
   font-size: 14px;
   color: var(--text);
+}
+
+.control-group .toggle {
+  min-height: 0;
+  padding-top: 0;
+  align-items: flex-start;
+  line-height: 1.35;
 }
 
 .crop-editor {
@@ -381,7 +388,7 @@ code {
   }
 
   .control-group {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 
   .toggle,
