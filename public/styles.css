@@ -167,6 +167,7 @@ label {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgba(12, 24, 41, 0.56);
+  align-content: start;
 }
 
 .crop-editor__header {
@@ -178,13 +179,15 @@ label {
 
 .crop-stage {
   position: relative;
-  width: min(100%, 260px);
+  width: 100%;
+  max-width: 220px;
   aspect-ratio: 1;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgba(3, 11, 19, 0.86);
   cursor: grab;
+  justify-self: start;
 }
 
 .crop-stage img {
@@ -364,6 +367,10 @@ code {
   grid-column: span 1;
 }
 
+.span-2 {
+  grid-column: span 2;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
@@ -379,7 +386,8 @@ code {
 
   .toggle,
   .span-full,
-  .span-1 {
+  .span-1,
+  .span-2 {
     grid-column: auto;
   }
 
