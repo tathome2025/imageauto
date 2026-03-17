@@ -432,10 +432,6 @@ function setupEditorInteractions(editor) {
     editor.naturalWidth = editor.image.naturalWidth;
     editor.naturalHeight = editor.image.naturalHeight;
     fitEditor(editor);
-
-    if (editor.supportsPlateMask && editor.maskToggle?.checked) {
-      void autoDetectPlate(editor);
-    }
   });
 
   editor.zoom.addEventListener("input", () => {
@@ -529,7 +525,16 @@ function setupEditorInteractions(editor) {
   });
 
   editor.detectButton?.addEventListener("click", async () => {
-    await autoDetectPlate(editor);
+    const originalText = editor.detectButton.textContent;
+    editor.detectButton.disabled = true;
+    editor.detectButton.textContent = "偵測中...";
+
+    try {
+      await autoDetectPlate(editor);
+    } finally {
+      editor.detectButton.disabled = false;
+      editor.detectButton.textContent = originalText;
+    }
   });
 
   editor.stage.addEventListener("click", (event) => {
@@ -943,5 +948,4 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-void ensureOpenCvReady().catch(() => {});
 loadConfig();
