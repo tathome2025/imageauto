@@ -37,9 +37,12 @@ const productLogoLayerNames = [
 ];
 
 function createImageEditor(id, options = {}) {
+  const supportsPlateMask = Boolean(options.supportsPlateMask);
+
   return {
     id,
-    isMain: Boolean(options.isMain),
+    label: options.label || id,
+    supportsPlateMask,
     input: document.getElementById(id),
     dropzone: document.getElementById(`dropzone-${id}`),
     stage: document.getElementById(`stage-${id}`),
@@ -49,12 +52,14 @@ function createImageEditor(id, options = {}) {
     resetView: document.getElementById(`reset-view-${id}`),
     toggle: document.getElementById(options.toggleId),
     status: document.getElementById(`status-${id}`),
-    maskToggle: options.isMain ? document.getElementById("maskPlate") : null,
-    modeCrop: options.isMain ? document.getElementById("mode-crop-mainImage") : null,
-    modePlate: options.isMain ? document.getElementById("mode-plate-mainImage") : null,
-    resetPlate: options.isMain ? document.getElementById("reset-plate-mainImage") : null,
-    overlay: options.isMain ? document.getElementById("overlay-mainImage") : null,
-    polygon: options.isMain ? document.getElementById("polygon-mainImage") : null,
+    maskToggle: supportsPlateMask
+      ? document.getElementById(options.maskToggleId || `mask-${id}`)
+      : null,
+    modeCrop: supportsPlateMask ? document.getElementById(`mode-crop-${id}`) : null,
+    modePlate: supportsPlateMask ? document.getElementById(`mode-plate-${id}`) : null,
+    resetPlate: supportsPlateMask ? document.getElementById(`reset-plate-${id}`) : null,
+    overlay: supportsPlateMask ? document.getElementById(`overlay-${id}`) : null,
+    polygon: supportsPlateMask ? document.getElementById(`polygon-${id}`) : null,
     file: null,
     fileUrl: "",
     naturalWidth: 0,
@@ -70,10 +75,25 @@ function createImageEditor(id, options = {}) {
 }
 
 const editors = {
-  mainImage: createImageEditor("mainImage", { isMain: true, toggleId: "showMainImage" }),
-  secondaryImage1: createImageEditor("secondaryImage1", { toggleId: "showSecondaryImage1" }),
-  secondaryImage2: createImageEditor("secondaryImage2", { toggleId: "showSecondaryImage2" }),
-  secondaryImage3: createImageEditor("secondaryImage3", { toggleId: "showSecondaryImage3" }),
+  mainImage: createImageEditor("mainImage", {
+    label: "主圖",
+    supportsPlateMask: true,
+    toggleId: "showMainImage",
+    maskToggleId: "maskPlate",
+  }),
+  secondaryImage1: createImageEditor("secondaryImage1", {
+    label: "副圖 1",
+    toggleId: "showSecondaryImage1",
+  }),
+  secondaryImage2: createImageEditor("secondaryImage2", {
+    label: "副圖 2-1",
+    toggleId: "showSecondaryImage2",
+  }),
+  secondaryImage3: createImageEditor("secondaryImage3", {
+    label: "副圖 2-2",
+    supportsPlateMask: true,
+    toggleId: "showSecondaryImage3",
+  }),
 };
 
 function clamp(value, min, max) {
@@ -123,7 +143,7 @@ function setEditorStatus(editor, text) {
 }
 
 function clearPlatePoints(editor, text) {
-  if (!editor.isMain) {
+  if (!editor.supportsPlateMask) {
     return;
   }
 
@@ -137,7 +157,7 @@ function clearPlatePoints(editor, text) {
 }
 
 function renderPlatePoints(editor) {
-  if (!editor.isMain) {
+  if (!editor.supportsPlateMask) {
     return;
   }
 
@@ -183,7 +203,7 @@ function renderEditor(editor) {
   editor.image.hidden = !hasFile;
 
   if (!hasFile) {
-    if (editor.isMain) {
+    if (editor.supportsPlateMask) {
       editor.overlay.hidden = true;
     }
     return;
@@ -193,7 +213,7 @@ function renderEditor(editor) {
   editor.image.style.height = `${editor.naturalHeight * editor.scale}px`;
   editor.image.style.transform = `translate(${editor.x}px, ${editor.y}px)`;
 
-  if (editor.isMain) {
+  if (editor.supportsPlateMask) {
     editor.overlay.hidden = false;
     editor.stage.classList.toggle("is-plate-mode", editor.mode === "plate");
     editor.modeCrop.classList.toggle("is-active", editor.mode === "crop");
@@ -218,7 +238,7 @@ function fitEditor(editor) {
 }
 
 function invalidatePlate(editor) {
-  if (!editor.isMain || editor.platePoints.length === 0) {
+  if (!editor.supportsPlateMask || editor.platePoints.length === 0) {
     return;
   }
 
@@ -236,11 +256,11 @@ function setEditorFile(editor, file) {
   editor.zoom.value = "1";
   editor.toggle.checked = true;
 
-  if (editor.isMain) {
+  if (editor.supportsPlateMask) {
     editor.mode = "crop";
-    clearPlatePoints(editor, "主圖已載入，請先裁圖。");
+    clearPlatePoints(editor, `${editor.label}已載入，請先裁圖。`);
   } else {
-    setEditorStatus(editor, "圖片已載入，可調整正方裁切範圍。");
+    setEditorStatus(editor, `${editor.label}已載入，可調整正方裁切範圍。`);
   }
 }
 
@@ -312,7 +332,7 @@ function setupEditorInteractions(editor) {
   });
 
   editor.stage.addEventListener("pointerdown", (event) => {
-    if (!editor.file || (editor.isMain && editor.mode !== "crop")) {
+    if (!editor.file || (editor.supportsPlateMask && editor.mode !== "crop")) {
       return;
     }
 
@@ -351,7 +371,7 @@ function setupEditorInteractions(editor) {
   editor.stage.addEventListener("pointerup", endDrag);
   editor.stage.addEventListener("pointercancel", endDrag);
 
-  if (!editor.isMain) {
+  if (!editor.supportsPlateMask) {
     return;
   }
 
@@ -429,9 +449,9 @@ async function renderSquareFile(editor, options = {}) {
     editor.naturalHeight * editor.scale * factor,
   );
 
-  if (editor.isMain && options.applyPlateMask) {
+  if (editor.supportsPlateMask && options.applyPlateMask) {
     if (editor.platePoints.length !== 4) {
-      throw new Error("請先在主圖點選車牌四個角。");
+      throw new Error(`請先在${editor.label}點選車牌四個角。`);
     }
 
     context.fillStyle = "#ffffff";
@@ -594,7 +614,9 @@ form.addEventListener("submit", async (event) => {
     }
 
     if (showSecondaryImage3) {
-      const renderedSecondary3 = await renderSquareFile(editors.secondaryImage3);
+      const renderedSecondary3 = await renderSquareFile(editors.secondaryImage3, {
+        applyPlateMask: editors.secondaryImage3.maskToggle.checked,
+      });
       uploadJobs.push(
         uploadImageFile("secondary-images", renderedSecondary3).then((url) => {
           uploadedSecondaryImageUrls[2] = url;
