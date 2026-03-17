@@ -7,28 +7,28 @@ function ensureCvReady() {
 
   if (!cvReadyPromise) {
     cvReadyPromise = new Promise((resolve, reject) => {
-      const previousCv = self.cv || {};
-      const previousInit = previousCv.onRuntimeInitialized;
-
-      self.cv = {
-        ...previousCv,
-        onRuntimeInitialized() {
-          previousInit?.();
-
-          if (!self.cv?.Mat) {
-            reject(new Error("OpenCV.js 載入失敗。"));
-            return;
-          }
-
-          resolve(self.cv);
-        },
-      };
-
       try {
-        self.importScripts("/vendor/opencv.js");
+        if (!self.cv) {
+          self.importScripts("/vendor/opencv.js");
+        }
       } catch (error) {
         reject(error);
+        return;
       }
+
+      if (!self.cv?.then) {
+        reject(new Error("OpenCV.js 初始化介面不存在。"));
+        return;
+      }
+
+      self.cv.then((readyCv) => {
+        if (!readyCv?.Mat) {
+          reject(new Error("OpenCV.js 載入失敗。"));
+          return;
+        }
+
+        resolve(readyCv);
+      });
     }).catch((error) => {
       cvReadyPromise = null;
       throw error;
