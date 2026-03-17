@@ -1,5 +1,3 @@
-self.Module = self.Module || {};
-
 let cvReadyPromise = null;
 
 function ensureCvReady() {
@@ -9,10 +7,11 @@ function ensureCvReady() {
 
   if (!cvReadyPromise) {
     cvReadyPromise = new Promise((resolve, reject) => {
-      const previousInit = self.Module.onRuntimeInitialized;
+      const previousCv = self.cv || {};
+      const previousInit = previousCv.onRuntimeInitialized;
 
-      self.Module = {
-        ...self.Module,
+      self.cv = {
+        ...previousCv,
         onRuntimeInitialized() {
           previousInit?.();
 
