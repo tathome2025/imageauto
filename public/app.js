@@ -7,6 +7,8 @@ const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
 const multipartThreshold = 4.5 * 1024 * 1024;
+const opencvModuleUrl = "https://esm.sh/@techstark/opencv-js@4.12.0-release.1";
+let openCvReadyPromise = null;
 
 const brandLogoControls = [
   { controlId: "brand_benz", layerNames: ["brand_benz"] },
@@ -50,6 +52,7 @@ function createImageEditor(id, options = {}) {
     placeholder: document.getElementById(`placeholder-${id}`),
     zoom: document.getElementById(`zoom-${id}`),
     resetView: document.getElementById(`reset-view-${id}`),
+    detectButton: supportsPlateMask ? document.getElementById(`detect-plate-${id}`) : null,
     toggle: document.getElementById(options.toggleId),
     status: document.getElementById(`status-${id}`),
     maskToggle: supportsPlateMask
@@ -119,6 +122,116 @@ async function readApiResponse(response) {
   } catch {
     return { error: raw || `Request failed with status ${response.status}.` };
   }
+}
+
+async function ensureOpenCvReady() {
+  if (window.__opencvReady?.Mat) {
+    return window.__opencvReady;
+  }
+
+  if (!openCvReadyPromise) {
+    openCvReadyPromise = import(opencvModuleUrl)
+      .then(async (module) => {
+        const candidate = module.default ?? module;
+        const resolved = await candidate;
+        const cv = resolved?.Mat
+          ? resolved
+          : resolved?.default?.Mat
+            ? resolved.default
+            : resolved?.cv?.Mat
+              ? resolved.cv
+              : module.cv?.Mat
+                ? module.cv
+                : null;
+
+        if (!cv?.Mat) {
+          throw new Error("OpenCV.js 載入失敗。");
+        }
+
+        window.__opencvReady = cv;
+        return cv;
+      })
+      .catch((error) => {
+        openCvReadyPromise = null;
+        throw error;
+      });
+  }
+
+  return openCvReadyPromise;
+}
+
+function extractContourPoints(mat) {
+  const points = [];
+
+  for (let index = 0; index < mat.rows; index += 1) {
+    const point = mat.intPtr(index, 0);
+    points.push({ x: point[0], y: point[1] });
+  }
+
+  return points;
+}
+
+function rectToPoints(rect) {
+  return [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+    { x: rect.x, y: rect.y + rect.height },
+  ];
+}
+
+function normalizePlatePoints(points, outputSize) {
+  const center = points.reduce(
+    (sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length }),
+    { x: 0, y: 0 },
+  );
+  const sorted = [...points].sort(
+    (left, right) =>
+      Math.atan2(left.y - center.y, left.x - center.x) -
+      Math.atan2(right.y - center.y, right.x - center.x),
+  );
+  const startIndex = sorted.reduce(
+    (bestIndex, point, index, array) =>
+      point.x + point.y < array[bestIndex].x + array[bestIndex].y ? index : bestIndex,
+    0,
+  );
+  const reordered = sorted.slice(startIndex).concat(sorted.slice(0, startIndex));
+
+  return reordered.map((point) => ({
+    x: clamp(point.x / outputSize, 0, 1),
+    y: clamp(point.y / outputSize, 0, 1),
+  }));
+}
+
+function scorePlateCandidate(points, area, outputSize) {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  if (width <= 0 || height <= 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const ratio = width / height;
+  const areaRatio = area / (outputSize * outputSize);
+  const fillRatio = area / Math.max(width * height, 1);
+
+  if (ratio < 1.35 || ratio > 7.5 || areaRatio < 0.003 || areaRatio > 0.22 || fillRatio < 0.35) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const centerX = (minX + maxX) / 2 / outputSize;
+  const centerY = (minY + maxY) / 2 / outputSize;
+  const ratioScore = Math.max(0, 1 - Math.abs(ratio - 3.2) / 3.8);
+  const areaScore = Math.max(0, 1 - Math.abs(areaRatio - 0.035) / 0.08);
+  const centerScore = Math.max(0, 1 - Math.hypot(centerX - 0.5, (centerY - 0.62) * 1.15) / 0.85);
+
+  return ratioScore * 0.38 + areaScore * 0.22 + centerScore * 0.28 + Math.min(fillRatio, 1) * 0.12;
 }
 
 async function loadConfig() {
@@ -305,6 +418,10 @@ function setupEditorInteractions(editor) {
     editor.naturalWidth = editor.image.naturalWidth;
     editor.naturalHeight = editor.image.naturalHeight;
     fitEditor(editor);
+
+    if (editor.supportsPlateMask && editor.maskToggle?.checked) {
+      void autoDetectPlate(editor);
+    }
   });
 
   editor.zoom.addEventListener("input", () => {
@@ -397,6 +514,10 @@ function setupEditorInteractions(editor) {
     clearPlatePoints(editor, "已清除角點，請重新點選。");
   });
 
+  editor.detectButton?.addEventListener("click", async () => {
+    await autoDetectPlate(editor);
+  });
+
   editor.stage.addEventListener("click", (event) => {
     if (!editor.file || editor.mode !== "plate") {
       return;
@@ -420,7 +541,7 @@ function setupEditorInteractions(editor) {
   });
 }
 
-async function renderSquareFile(editor, options = {}) {
+async function renderSquareCanvas(editor, options = {}) {
   if (!editor.file) {
     return null;
   }
@@ -429,7 +550,7 @@ async function renderSquareFile(editor, options = {}) {
   const stageSize = editor.stage.clientWidth;
 
   if (!stageSize) {
-    return editor.file;
+    throw new Error("圖片編輯器尚未就緒。");
   }
 
   const canvas = document.createElement("canvas");
@@ -450,6 +571,121 @@ async function renderSquareFile(editor, options = {}) {
     editor.naturalWidth * editor.scale * factor,
     editor.naturalHeight * editor.scale * factor,
   );
+
+  return { canvas, context, outputSize };
+}
+
+async function autoDetectPlate(editor, options = {}) {
+  if (!editor.supportsPlateMask || !editor.file) {
+    return false;
+  }
+
+  const quiet = Boolean(options.quiet);
+
+  if (!quiet) {
+    setEditorStatus(editor, `${editor.label} OpenCV 偵測中...`);
+  }
+
+  let cv;
+  let src;
+  let gray;
+  let blurred;
+  let edges;
+  let morphed;
+  let contours;
+  let hierarchy;
+  let kernel;
+
+  try {
+    cv = await ensureOpenCvReady();
+    const { canvas, outputSize } = await renderSquareCanvas(editor, { outputSize: 960 });
+    src = cv.imread(canvas);
+    gray = new cv.Mat();
+    blurred = new cv.Mat();
+    edges = new cv.Mat();
+    morphed = new cv.Mat();
+    contours = new cv.MatVector();
+    hierarchy = new cv.Mat();
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+    cv.Canny(blurred, edges, 70, 180, 3, false);
+    cv.morphologyEx(edges, morphed, cv.MORPH_CLOSE, kernel);
+    cv.findContours(morphed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+    let bestCandidate = null;
+
+    for (let index = 0; index < contours.size(); index += 1) {
+      const contour = contours.get(index);
+      const contourArea = Math.abs(cv.contourArea(contour));
+      const approx = new cv.Mat();
+
+      try {
+        if (contourArea < outputSize * outputSize * 0.003 || contourArea > outputSize * outputSize * 0.24) {
+          continue;
+        }
+
+        const perimeter = cv.arcLength(contour, true);
+        cv.approxPolyDP(contour, approx, 0.03 * perimeter, true);
+
+        const isQuad = approx.rows === 4 && cv.isContourConvex(approx);
+        const polygonPoints = isQuad ? extractContourPoints(approx) : rectToPoints(cv.boundingRect(contour));
+        const score = scorePlateCandidate(polygonPoints, contourArea, outputSize) + (isQuad ? 0.12 : 0);
+
+        if (!Number.isFinite(score) || (bestCandidate && score <= bestCandidate.score)) {
+          continue;
+        }
+
+        bestCandidate = {
+          score,
+          points: polygonPoints,
+          outputSize,
+        };
+      } finally {
+        approx.delete();
+        contour.delete();
+      }
+    }
+
+    if (!bestCandidate) {
+      if (!quiet) {
+        setEditorStatus(editor, `${editor.label} 未找到明顯車牌，請切到「遮牌」模式手動點四角。`);
+      }
+      return false;
+    }
+
+    editor.platePoints = normalizePlatePoints(bestCandidate.points, bestCandidate.outputSize);
+    editor.mode = "plate";
+    renderEditor(editor);
+    setEditorStatus(editor, `${editor.label} 已用 OpenCV 自動偵測，可直接生成；如需修正請清除四角後重選。`);
+    return true;
+  } catch (error) {
+    if (!quiet) {
+      setEditorStatus(
+        editor,
+        error instanceof Error ? error.message : `${editor.label} 自動偵測失敗，請手動點四角。`,
+      );
+    }
+    return false;
+  } finally {
+    kernel?.delete();
+    hierarchy?.delete();
+    contours?.delete();
+    morphed?.delete();
+    edges?.delete();
+    blurred?.delete();
+    gray?.delete();
+    src?.delete();
+  }
+}
+
+async function renderSquareFile(editor, options = {}) {
+  if (!editor.file) {
+    return null;
+  }
+
+  const { canvas, context, outputSize } = await renderSquareCanvas(editor, options);
 
   if (editor.supportsPlateMask && options.applyPlateMask) {
     if (editor.platePoints.length !== 4) {
@@ -693,4 +929,5 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+void ensureOpenCvReady().catch(() => {});
 loadConfig();
