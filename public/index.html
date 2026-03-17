@@ -26,7 +26,7 @@
           <span class="panel-step">1</span>
           <div>
             <h2>相片處理</h2>
-            <p>所有相片都先裁成正方型；主圖與副圖 2-2 可在同一個方塊內先裁圖，再點車牌四角遮白。</p>
+            <p>所有相片都先裁成正方型；每幅圖都可在同一個方塊內先裁圖，再點車牌四角遮白。</p>
           </div>
         </div>
 
@@ -101,7 +101,16 @@
             </button>
 
             <div class="editor-toolbar">
+              <div class="mode-switch">
+                <button id="mode-crop-secondaryImage1" class="mode-button is-active" type="button">裁圖</button>
+                <button id="mode-plate-secondaryImage1" class="mode-button" type="button">遮牌</button>
+              </div>
+              <label class="toggle compact">
+                <input id="mask-secondaryImage1" name="mask-secondaryImage1" type="checkbox" checked />
+                遮白車牌
+              </label>
               <button id="reset-view-secondaryImage1" class="ghost-button" type="button">重設視圖</button>
+              <button id="reset-plate-secondaryImage1" class="ghost-button" type="button">清除四角</button>
             </div>
 
             <label class="zoom-control">
@@ -111,9 +120,12 @@
 
             <div id="stage-secondaryImage1" class="editor-stage">
               <div id="placeholder-secondaryImage1" class="editor-placeholder">
-                副圖 1 會在這裡裁成正方型。
+                副圖 1 會在這裡裁成正方型。切到「遮牌」模式後，再依序點選車牌四個角。
               </div>
               <img id="image-secondaryImage1" alt="Secondary image 1 editor preview" hidden />
+              <svg id="overlay-secondaryImage1" class="editor-overlay" hidden>
+                <polygon id="polygon-secondaryImage1" class="editor-polygon"></polygon>
+              </svg>
             </div>
 
             <div id="status-secondaryImage1" class="editor-status">尚未選擇副圖 1</div>
@@ -139,7 +151,16 @@
             </button>
 
             <div class="editor-toolbar">
+              <div class="mode-switch">
+                <button id="mode-crop-secondaryImage2" class="mode-button is-active" type="button">裁圖</button>
+                <button id="mode-plate-secondaryImage2" class="mode-button" type="button">遮牌</button>
+              </div>
+              <label class="toggle compact">
+                <input id="mask-secondaryImage2" name="mask-secondaryImage2" type="checkbox" checked />
+                遮白車牌
+              </label>
               <button id="reset-view-secondaryImage2" class="ghost-button" type="button">重設視圖</button>
+              <button id="reset-plate-secondaryImage2" class="ghost-button" type="button">清除四角</button>
             </div>
 
             <label class="zoom-control">
@@ -149,9 +170,12 @@
 
             <div id="stage-secondaryImage2" class="editor-stage">
               <div id="placeholder-secondaryImage2" class="editor-placeholder">
-                副圖 2 會在這裡裁成正方型。
+                副圖 2 會在這裡裁成正方型。切到「遮牌」模式後，再依序點選車牌四個角。
               </div>
               <img id="image-secondaryImage2" alt="Secondary image 2 editor preview" hidden />
+              <svg id="overlay-secondaryImage2" class="editor-overlay" hidden>
+                <polygon id="polygon-secondaryImage2" class="editor-polygon"></polygon>
+              </svg>
             </div>
 
             <div id="status-secondaryImage2" class="editor-status">尚未選擇副圖 2-1</div>

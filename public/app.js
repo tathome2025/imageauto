@@ -83,10 +83,12 @@ const editors = {
   }),
   secondaryImage1: createImageEditor("secondaryImage1", {
     label: "副圖 1",
+    supportsPlateMask: true,
     toggleId: "showSecondaryImage1",
   }),
   secondaryImage2: createImageEditor("secondaryImage2", {
     label: "副圖 2-1",
+    supportsPlateMask: true,
     toggleId: "showSecondaryImage2",
   }),
   secondaryImage3: createImageEditor("secondaryImage3", {
@@ -596,7 +598,9 @@ form.addEventListener("submit", async (event) => {
     }
 
     if (showSecondaryImage1) {
-      const renderedSecondary1 = await renderSquareFile(editors.secondaryImage1);
+      const renderedSecondary1 = await renderSquareFile(editors.secondaryImage1, {
+        applyPlateMask: editors.secondaryImage1.maskToggle.checked,
+      });
       uploadJobs.push(
         uploadImageFile("secondary-images", renderedSecondary1).then((url) => {
           uploadedSecondaryImageUrls[0] = url;
@@ -605,7 +609,9 @@ form.addEventListener("submit", async (event) => {
     }
 
     if (showSecondaryImage2) {
-      const renderedSecondary2 = await renderSquareFile(editors.secondaryImage2);
+      const renderedSecondary2 = await renderSquareFile(editors.secondaryImage2, {
+        applyPlateMask: editors.secondaryImage2.maskToggle.checked,
+      });
       uploadJobs.push(
         uploadImageFile("secondary-images", renderedSecondary2).then((url) => {
           uploadedSecondaryImageUrls[1] = url;
