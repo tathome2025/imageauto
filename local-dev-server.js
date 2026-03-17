@@ -8,6 +8,8 @@ dotenv.config();
 const configHandler = require("./api/config");
 const renderHandler = require("./api/render");
 const uploadHandler = require("./api/upload");
+const templatesHandler = require("./api/v1/templates");
+const imageRenderHandler = require("./api/v1/renders");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -33,6 +35,9 @@ function createResponse(res) {
     json(payload) {
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(JSON.stringify(payload));
+    },
+    send(payload) {
+      res.end(payload);
     },
   };
 }
@@ -92,6 +97,15 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/upload") {
     req.body = await readRequestText(req);
     return uploadHandler(req, createResponse(res));
+  }
+
+  if (url.pathname === "/api/v1/templates") {
+    return templatesHandler(req, createResponse(res));
+  }
+
+  if (url.pathname === "/api/v1/renders") {
+    req.body = await readRequestBody(req);
+    return imageRenderHandler(req, createResponse(res));
   }
 
   const safePath = url.pathname === "/" ? "/index.html" : url.pathname;

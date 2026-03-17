@@ -6,6 +6,7 @@ module.exports = async function handler(_req, res) {
   res.status(200).json({
     configured: Boolean(config.apiKey && config.templateId),
     templateId: config.templateId,
+    upload: config.upload,
     layers: config.layers,
   });
 };

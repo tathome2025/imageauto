@@ -1,0 +1,103 @@
+{
+  "id": "promo-card",
+  "name": "Promo Card",
+  "description": "A wide promo banner with hero image, headline and CTA.",
+  "size": {
+    "width": 1200,
+    "height": 628
+  },
+  "background": "#0B1020",
+  "variables": [
+    "eyebrow",
+    "title",
+    "subtitle",
+    "cta",
+    "imageUrl"
+  ],
+  "layers": [
+    {
+      "type": "rect",
+      "x": 40,
+      "y": 40,
+      "width": 1120,
+      "height": 548,
+      "radius": 36,
+      "fill": "#11162B"
+    },
+    {
+      "type": "rect",
+      "x": 72,
+      "y": 72,
+      "width": 586,
+      "height": 484,
+      "radius": 28,
+      "fill": "#0F172A"
+    },
+    {
+      "type": "image",
+      "key": "imageUrl",
+      "x": 692,
+      "y": 72,
+      "width": 436,
+      "height": 484,
+      "radius": 28,
+      "background": "#25304F"
+    },
+    {
+      "type": "text",
+      "key": "eyebrow",
+      "x": 96,
+      "y": 130,
+      "maxWidth": 500,
+      "fontSize": 24,
+      "fontWeight": 700,
+      "fill": "#7DD3FC",
+      "letterSpacing": 2,
+      "uppercase": true
+    },
+    {
+      "type": "text",
+      "key": "title",
+      "x": 96,
+      "y": 206,
+      "maxWidth": 500,
+      "maxLines": 3,
+      "fontSize": 64,
+      "lineHeight": 76,
+      "fontWeight": 800,
+      "fill": "#F8FAFC"
+    },
+    {
+      "type": "text",
+      "key": "subtitle",
+      "x": 96,
+      "y": 438,
+      "maxWidth": 500,
+      "maxLines": 3,
+      "fontSize": 28,
+      "lineHeight": 38,
+      "fontWeight": 400,
+      "fill": "#CBD5E1"
+    },
+    {
+      "type": "rect",
+      "x": 96,
+      "y": 494,
+      "width": 224,
+      "height": 46,
+      "radius": 23,
+      "fill": "#38BDF8"
+    },
+    {
+      "type": "text",
+      "key": "cta",
+      "x": 120,
+      "y": 525,
+      "maxWidth": 176,
+      "fontSize": 20,
+      "fontWeight": 700,
+      "fill": "#082F49",
+      "align": "center"
+    }
+  ]
+}

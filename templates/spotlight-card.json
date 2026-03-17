@@ -1,0 +1,87 @@
+{
+  "id": "spotlight-card",
+  "name": "Spotlight Card",
+  "description": "Square social card with top image and stacked copy.",
+  "size": {
+    "width": 1080,
+    "height": 1080
+  },
+  "background": "#F8FAFC",
+  "variables": [
+    "label",
+    "title",
+    "description",
+    "footer",
+    "imageUrl"
+  ],
+  "layers": [
+    {
+      "type": "rect",
+      "x": 48,
+      "y": 48,
+      "width": 984,
+      "height": 984,
+      "radius": 40,
+      "fill": "#FFFFFF",
+      "stroke": "#E2E8F0",
+      "strokeWidth": 2
+    },
+    {
+      "type": "image",
+      "key": "imageUrl",
+      "x": 96,
+      "y": 96,
+      "width": 888,
+      "height": 500,
+      "radius": 28,
+      "background": "#E2E8F0"
+    },
+    {
+      "type": "text",
+      "key": "label",
+      "x": 108,
+      "y": 658,
+      "maxWidth": 820,
+      "fontSize": 28,
+      "fontWeight": 700,
+      "fill": "#0F766E",
+      "letterSpacing": 2,
+      "uppercase": true
+    },
+    {
+      "type": "text",
+      "key": "title",
+      "x": 108,
+      "y": 734,
+      "maxWidth": 820,
+      "maxLines": 3,
+      "fontSize": 70,
+      "lineHeight": 84,
+      "fontWeight": 800,
+      "fill": "#0F172A"
+    },
+    {
+      "type": "text",
+      "key": "description",
+      "x": 108,
+      "y": 964,
+      "maxWidth": 760,
+      "maxLines": 2,
+      "fontSize": 30,
+      "lineHeight": 40,
+      "fontWeight": 400,
+      "fill": "#475569"
+    },
+    {
+      "type": "text",
+      "key": "footer",
+      "x": 792,
+      "y": 982,
+      "maxWidth": 180,
+      "fontSize": 24,
+      "fontWeight": 700,
+      "fill": "#0F172A",
+      "align": "right"
+    }
+  ]
+}

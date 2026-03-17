@@ -2,7 +2,7 @@
   "name": "bannerbear-layout-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal web app for generating Bannerbear layouts.",
+  "description": "Self-hosted image generation API with Bannerbear-compatible starter tooling.",
   "main": "local-dev-server.js",
   "scripts": {
     "dev": "node --watch local-dev-server.js",
@@ -12,6 +12,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@vercel/blob": "^1.1.1",
     "dotenv": "^16.4.7"
   }
