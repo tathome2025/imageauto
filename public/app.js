@@ -7,8 +7,8 @@ const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
 const multipartThreshold = 4.5 * 1024 * 1024;
-const opencvScriptUrl = "/vendor/opencv.js";
-let openCvReadyPromise = null;
+let plateWorkerPromise = null;
+let plateWorkerRequestId = 0;
 
 const brandLogoControls = [
   { controlId: "brand_benz", layerNames: ["brand_benz"] },
@@ -124,128 +124,12 @@ async function readApiResponse(response) {
   }
 }
 
-async function ensureOpenCvReady() {
-  if (window.__opencvReady?.Mat) {
-    return window.__opencvReady;
+function ensurePlateWorker() {
+  if (!plateWorkerPromise) {
+    plateWorkerPromise = Promise.resolve(new Worker("/plate-detect-worker.js"));
   }
 
-  if (window.cv?.Mat) {
-    window.__opencvReady = window.cv;
-    return window.cv;
-  }
-
-  if (!openCvReadyPromise) {
-    openCvReadyPromise = new Promise((resolve, reject) => {
-      const existingScript = document.querySelector('script[data-opencv-loader="true"]');
-      const previousModule = window.Module || {};
-      const previousInit = previousModule.onRuntimeInitialized;
-
-      window.Module = {
-        ...previousModule,
-        onRuntimeInitialized() {
-          previousInit?.();
-
-          if (!window.cv?.Mat) {
-            reject(new Error("OpenCV.js 載入失敗。"));
-            return;
-          }
-
-          window.__opencvReady = window.cv;
-          resolve(window.cv);
-        },
-      };
-
-      if (existingScript) {
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = opencvScriptUrl;
-      script.async = true;
-      script.dataset.opencvLoader = "true";
-      script.onerror = () => reject(new Error("OpenCV.js 載入失敗。"));
-      document.head.append(script);
-    }).catch((error) => {
-      openCvReadyPromise = null;
-      throw error;
-    });
-  }
-
-  return openCvReadyPromise;
-}
-
-function extractContourPoints(mat) {
-  const points = [];
-
-  for (let index = 0; index < mat.rows; index += 1) {
-    const point = mat.intPtr(index, 0);
-    points.push({ x: point[0], y: point[1] });
-  }
-
-  return points;
-}
-
-function rectToPoints(rect) {
-  return [
-    { x: rect.x, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y + rect.height },
-    { x: rect.x, y: rect.y + rect.height },
-  ];
-}
-
-function normalizePlatePoints(points, outputSize) {
-  const center = points.reduce(
-    (sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length }),
-    { x: 0, y: 0 },
-  );
-  const sorted = [...points].sort(
-    (left, right) =>
-      Math.atan2(left.y - center.y, left.x - center.x) -
-      Math.atan2(right.y - center.y, right.x - center.x),
-  );
-  const startIndex = sorted.reduce(
-    (bestIndex, point, index, array) =>
-      point.x + point.y < array[bestIndex].x + array[bestIndex].y ? index : bestIndex,
-    0,
-  );
-  const reordered = sorted.slice(startIndex).concat(sorted.slice(0, startIndex));
-
-  return reordered.map((point) => ({
-    x: clamp(point.x / outputSize, 0, 1),
-    y: clamp(point.y / outputSize, 0, 1),
-  }));
-}
-
-function scorePlateCandidate(points, area, outputSize) {
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const width = maxX - minX;
-  const height = maxY - minY;
-
-  if (width <= 0 || height <= 0) {
-    return Number.NEGATIVE_INFINITY;
-  }
-
-  const ratio = width / height;
-  const areaRatio = area / (outputSize * outputSize);
-  const fillRatio = area / Math.max(width * height, 1);
-
-  if (ratio < 1.35 || ratio > 7.5 || areaRatio < 0.003 || areaRatio > 0.22 || fillRatio < 0.35) {
-    return Number.NEGATIVE_INFINITY;
-  }
-
-  const centerX = (minX + maxX) / 2 / outputSize;
-  const centerY = (minY + maxY) / 2 / outputSize;
-  const ratioScore = Math.max(0, 1 - Math.abs(ratio - 3.2) / 3.8);
-  const areaScore = Math.max(0, 1 - Math.abs(areaRatio - 0.035) / 0.08);
-  const centerScore = Math.max(0, 1 - Math.hypot(centerX - 0.5, (centerY - 0.62) * 1.15) / 0.85);
-
-  return ratioScore * 0.38 + areaScore * 0.22 + centerScore * 0.28 + Math.min(fillRatio, 1) * 0.12;
+  return plateWorkerPromise;
 }
 
 async function loadConfig() {
@@ -605,76 +489,61 @@ async function autoDetectPlate(editor, options = {}) {
     setEditorStatus(editor, `${editor.label} OpenCV 偵測中...`);
   }
 
-  let cv;
-  let src;
-  let gray;
-  let blurred;
-  let edges;
-  let morphed;
-  let contours;
-  let hierarchy;
-  let kernel;
-
   try {
-    cv = await ensureOpenCvReady();
-    const { canvas, outputSize } = await renderSquareCanvas(editor, { outputSize: 960 });
-    src = cv.imread(canvas);
-    gray = new cv.Mat();
-    blurred = new cv.Mat();
-    edges = new cv.Mat();
-    morphed = new cv.Mat();
-    contours = new cv.MatVector();
-    hierarchy = new cv.Mat();
-    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    const { context, outputSize } = await renderSquareCanvas(editor, { outputSize: 640 });
+    const imageData = context.getImageData(0, 0, outputSize, outputSize);
+    const worker = await ensurePlateWorker();
+    const requestId = ++plateWorkerRequestId;
+    const result = await new Promise((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        worker.removeEventListener("message", handleMessage);
+        worker.removeEventListener("error", handleError);
+        reject(new Error("OpenCV 偵測逾時，請改用手動點四角。"));
+      }, 15000);
 
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-    cv.Canny(blurred, edges, 70, 180, 3, false);
-    cv.morphologyEx(edges, morphed, cv.MORPH_CLOSE, kernel);
-    cv.findContours(morphed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-
-    let bestCandidate = null;
-
-    for (let index = 0; index < contours.size(); index += 1) {
-      const contour = contours.get(index);
-      const contourArea = Math.abs(cv.contourArea(contour));
-      const approx = new cv.Mat();
-
-      try {
-        if (contourArea < outputSize * outputSize * 0.003 || contourArea > outputSize * outputSize * 0.24) {
-          continue;
+      const handleMessage = (event) => {
+        if (event.data?.id !== requestId) {
+          return;
         }
 
-        const perimeter = cv.arcLength(contour, true);
-        cv.approxPolyDP(contour, approx, 0.03 * perimeter, true);
+        window.clearTimeout(timeoutId);
+        worker.removeEventListener("message", handleMessage);
+        worker.removeEventListener("error", handleError);
+        resolve(event.data);
+      };
 
-        const isQuad = approx.rows === 4 && cv.isContourConvex(approx);
-        const polygonPoints = isQuad ? extractContourPoints(approx) : rectToPoints(cv.boundingRect(contour));
-        const score = scorePlateCandidate(polygonPoints, contourArea, outputSize) + (isQuad ? 0.12 : 0);
+      const handleError = () => {
+        window.clearTimeout(timeoutId);
+        worker.removeEventListener("message", handleMessage);
+        worker.removeEventListener("error", handleError);
+        reject(new Error("OpenCV 偵測失敗，請改用手動點四角。"));
+      };
 
-        if (!Number.isFinite(score) || (bestCandidate && score <= bestCandidate.score)) {
-          continue;
-        }
+      worker.addEventListener("message", handleMessage);
+      worker.addEventListener("error", handleError);
+      worker.postMessage(
+        {
+          id: requestId,
+          type: "detect",
+          width: outputSize,
+          height: outputSize,
+          buffer: imageData.data.buffer,
+        },
+        [imageData.data.buffer],
+      );
+    });
 
-        bestCandidate = {
-          score,
-          points: polygonPoints,
-          outputSize,
-        };
-      } finally {
-        approx.delete();
-        contour.delete();
-      }
-    }
-
-    if (!bestCandidate) {
+    if (!result?.found || !Array.isArray(result.points) || result.points.length !== 4) {
       if (!quiet) {
         setEditorStatus(editor, `${editor.label} 未找到明顯車牌，請切到「遮牌」模式手動點四角。`);
       }
       return false;
     }
 
-    editor.platePoints = normalizePlatePoints(bestCandidate.points, bestCandidate.outputSize);
+    editor.platePoints = result.points.map((point) => ({
+      x: clamp(point.x, 0, 1),
+      y: clamp(point.y, 0, 1),
+    }));
     editor.mode = "plate";
     renderEditor(editor);
     setEditorStatus(editor, `${editor.label} 已用 OpenCV 自動偵測，可直接生成；如需修正請清除四角後重選。`);
@@ -687,15 +556,6 @@ async function autoDetectPlate(editor, options = {}) {
       );
     }
     return false;
-  } finally {
-    kernel?.delete();
-    hierarchy?.delete();
-    contours?.delete();
-    morphed?.delete();
-    edges?.delete();
-    blurred?.delete();
-    gray?.delete();
-    src?.delete();
   }
 }
 
