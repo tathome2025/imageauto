@@ -7,7 +7,7 @@ const resultLink = document.getElementById("result-link");
 const form = document.getElementById("render-form");
 const submitButton = document.getElementById("submit-button");
 const multipartThreshold = 4.5 * 1024 * 1024;
-const opencvModuleUrl = "https://esm.sh/@techstark/opencv-js@4.12.0-release.1";
+const opencvScriptUrl = "/vendor/opencv.js";
 let openCvReadyPromise = null;
 
 const brandLogoControls = [
@@ -129,32 +129,46 @@ async function ensureOpenCvReady() {
     return window.__opencvReady;
   }
 
+  if (window.cv?.Mat) {
+    window.__opencvReady = window.cv;
+    return window.cv;
+  }
+
   if (!openCvReadyPromise) {
-    openCvReadyPromise = import(opencvModuleUrl)
-      .then(async (module) => {
-        const candidate = module.default ?? module;
-        const resolved = await candidate;
-        const cv = resolved?.Mat
-          ? resolved
-          : resolved?.default?.Mat
-            ? resolved.default
-            : resolved?.cv?.Mat
-              ? resolved.cv
-              : module.cv?.Mat
-                ? module.cv
-                : null;
+    openCvReadyPromise = new Promise((resolve, reject) => {
+      const existingScript = document.querySelector('script[data-opencv-loader="true"]');
+      const previousModule = window.Module || {};
+      const previousInit = previousModule.onRuntimeInitialized;
 
-        if (!cv?.Mat) {
-          throw new Error("OpenCV.js 載入失敗。");
-        }
+      window.Module = {
+        ...previousModule,
+        onRuntimeInitialized() {
+          previousInit?.();
 
-        window.__opencvReady = cv;
-        return cv;
-      })
-      .catch((error) => {
-        openCvReadyPromise = null;
-        throw error;
-      });
+          if (!window.cv?.Mat) {
+            reject(new Error("OpenCV.js 載入失敗。"));
+            return;
+          }
+
+          window.__opencvReady = window.cv;
+          resolve(window.cv);
+        },
+      };
+
+      if (existingScript) {
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = opencvScriptUrl;
+      script.async = true;
+      script.dataset.opencvLoader = "true";
+      script.onerror = () => reject(new Error("OpenCV.js 載入失敗。"));
+      document.head.append(script);
+    }).catch((error) => {
+      openCvReadyPromise = null;
+      throw error;
+    });
   }
 
   return openCvReadyPromise;
